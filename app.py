@@ -21,9 +21,17 @@ app = Flask(__name__)
 # ======================================================
 # FIREBASE CONFIG
 # ======================================================
-cred = credentials.Certificate("serviceAccountKey.json")
-firebase_admin.initialize_app(cred)
+if not firebase_admin._apps:
+    firebase_key = os.environ.get("FIREBASE_KEY")
+    
+    if not firebase_key:
+        raise RuntimeError("FIREBASE_KEY environment variable not set")
+    
+    cred = credentials.Certificate(json.loads(firebase_key))
+    firebase_admin.initialize_app(cred)
+
 db = firestore.client()
+
 
 # ======================================================
 # ITEM CACHE (NO VECTORIZATION, JUST ITEM DATA)
@@ -835,3 +843,4 @@ else:
     print("[PROD] Running in production mode - cache will initialize on first request")
     # Don't initialize here - let before_first_request handle it
     pass
+
