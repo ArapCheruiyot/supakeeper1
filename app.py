@@ -30,8 +30,15 @@ app = Flask(__name__)
 # ======================================================
 # FIREBASE CONFIG
 # ======================================================
-cred = credentials.Certificate("serviceAccountKey.json")
-firebase_admin.initialize_app(cred)
+if not firebase_admin._apps:
+    firebase_key = os.environ.get("FIREBASE_KEY")
+    
+    if not firebase_key:
+        raise RuntimeError("FIREBASE_KEY environment variable not set")
+    
+    cred = credentials.Certificate(json.loads(firebase_key))
+    firebase_admin.initialize_app(cred)
+
 db = firestore.client()
 
 # ======================================================
@@ -1643,4 +1650,5 @@ if __name__ == "__main__":
     db.collection_group("sellUnits").on_snapshot(on_selling_units_snapshot)
     print("[READY] Listeners active for items and selling units")
     
+
     app.run(debug=True)
