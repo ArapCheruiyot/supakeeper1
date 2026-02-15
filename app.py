@@ -1522,6 +1522,9 @@ def debug_cache():
 # ======================================================
 # PLAN INITIALIZATION ROUTES
 # ======================================================
+# ======================================================
+# PLAN INITIALIZATION ROUTES
+# ======================================================
 @app.route("/ensure-plan", methods=["POST"])
 def ensure_plan():
     """
@@ -1529,6 +1532,15 @@ def ensure_plan():
     Creates a 'Solo' plan only if none exists.
     """
     try:
+        # Check if Firebase is initialized first
+        if db is None:
+            print("❌ Firebase not initialized - cannot ensure plan")
+            return jsonify({
+                "success": False,
+                "error": "Database connection not available",
+                "details": "Firebase not initialized - check server logs"
+            }), 503  # Service Unavailable
+
         data = request.get_json(silent=True) or {}
         shop_id = data.get("shop_id")
 
@@ -1538,6 +1550,8 @@ def ensure_plan():
                 "error": "shop_id is required"
             }), 400
 
+        print(f"📝 Ensuring plan for shop: {shop_id}")
+
         plan_ref = (
             db.collection("Shops")
               .document(shop_id)
@@ -1545,12 +1559,15 @@ def ensure_plan():
               .document("default")
         )
 
-        if plan_ref.get().exists:
+        # Check if plan exists
+        plan_doc = plan_ref.get()
+        if plan_doc.exists:
             return jsonify({
                 "success": True,
                 "message": "Plan already exists for this shop."
             })
 
+        # Create default plan
         default_plan = {
             "name": "Solo",
             "staffLimit": 0,
@@ -1565,7 +1582,6 @@ def ensure_plan():
         }
 
         plan_ref.set(default_plan)
-
         print(f"✅ Default plan initialized for shop: {shop_id}")
 
         return jsonify({
@@ -1575,11 +1591,13 @@ def ensure_plan():
 
     except Exception as e:
         print(f"🔥 ensure-plan error: {e}")
+        import traceback
+        traceback.print_exc()  # This will print the full error trace
         return jsonify({
             "success": False,
-            "error": "Internal server error"
+            "error": "Internal server error",
+            "details": str(e)  # This helps with debugging
         }), 500
-
 # ======================================================
 # ADMIN DASHBOARD
 # ======================================================
@@ -1663,3 +1681,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
 
     app.run(host="0.0.0.0", port=port, debug=True)
+
