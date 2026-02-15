@@ -1,12 +1,11 @@
-// smallSellingUnit.js - Selling Units UI Manager WITH BATCH LINKING
-// Version 4.0.0 - Auto-batch linking + Optional Price + 2 required images
+// smallSellingUnit.js - Selling Units UI Manager
+// Version 3.0.0 - Firestore + Cloudinary + 2 required images
 
 (function() {
   'use strict';
 
   // ========= Configuration =========
-  const SELL_UNITS_COLLECTION = 'sellUnits';
-  const BATCHES_COLLECTION = 'batches';
+  const SELL_UNITS_COLLECTION = 'sellUnits'; // change to 'sellingUnits' if you prefer that name
 
   const IMAGES = {
     requiredCount: 2,
@@ -14,22 +13,16 @@
     allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/jpg']
   };
 
-  // ========= Integrations =========
-  const INTEGRATIONS = { 
-    db: null, 
-    auth: null, 
-    FS: null, 
-    cloudName: null, 
-    uploadPreset: null 
-  };
+  // ========= Integrations (injected once by your app/overlay) =========
+  const INTEGRATIONS = { db: null, auth: null, FS: null, cloudName: null, uploadPreset: null };
 
+  // Allow host app to inject Firebase + Cloudinary deps once
   window.sellingUnitsConfigure = function ({ db, auth, FS, cloudName, uploadPreset } = {}) {
     if (db) INTEGRATIONS.db = db;
     if (auth) INTEGRATIONS.auth = auth;
-    if (FS) INTEGRATIONS.FS = FS;
+    if (FS) INTEGRATIONS.FS = FS; // { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, serverTimestamp }
     if (cloudName) INTEGRATIONS.cloudName = cloudName;
     if (uploadPreset) INTEGRATIONS.uploadPreset = uploadPreset;
-    console.log('Selling Units configured with batch linking support');
   };
 
   function requireConfigured() {
@@ -37,7 +30,7 @@
       throw new Error("SellingUnits: Firebase not configured. Call window.sellingUnitsConfigure(...) once.");
     }
     if (!INTEGRATIONS.cloudName || !INTEGRATIONS.uploadPreset) {
-      throw new Error("SellingUnits: Cloudinary not configured. Pass cloudName and uploadPreset.");
+      throw new Error("SellingUnits: Cloudinary not configured. Pass cloudName and uploadPreset in sellingUnitsConfigure.");
     }
   }
 
@@ -64,8 +57,7 @@
   // ========= State =========
   const state = {
     currentItemId: null,
-    sellingUnits: new Map(),
-    activeBatches: [], // NEW: Store active batches for linking
+    sellingUnits: new Map(), // itemId -> array of units [{id,name,conversionFactor,images,...}]
     observers: [],
     isModalOpen: false,
     loading: false
@@ -100,14 +92,9 @@
     return (b / (1024 * 1024)).toFixed(1);
   }
 
-  function formatPrice(amount) {
-    if (!amount && amount !== 0) return '';
-    return parseFloat(amount).toFixed(2);
-  }
-
   // ========= Styles =========
   function injectStyles() {
-    const styleId = 'selling-units-styles-v4';
+    const styleId = 'selling-units-styles';
     if (document.getElementById(styleId)) return;
 
     const styles = `
@@ -136,7 +123,7 @@
         animation: fadeIn 0.2s ease;
       }
       .selling-units-modal {
-        background: white; border-radius: 8px; width: 90%; max-width: 620px; /* Increased width */
+        background: white; border-radius: 8px; width: 90%; max-width: 520px;
         max-height: 85vh; overflow-y: auto; animation: slideIn 0.3s ease;
         box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
       }
@@ -152,17 +139,6 @@
       .item-info { background: #f9fafb; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; }
       .item-name { margin: 0 0 4px 0; font-weight: 500; color: #111827; }
       .base-unit { margin: 0; font-size: 14px; color: #6b7280; }
-
-      .batches-info { 
-        background: #f0f9ff; 
-        padding: 12px 16px; 
-        border-radius: 6px; 
-        margin-bottom: 20px;
-        border-left: 4px solid #0ea5e9;
-      }
-      .batches-title { margin: 0 0 8px 0; font-weight: 600; color: #0369a1; font-size: 14px; }
-      .batch-list { margin: 0; padding-left: 20px; font-size: 13px; color: #475569; }
-      .batch-item { margin-bottom: 4px; }
 
       .form-group { margin-bottom: 16px; }
       .form-label { display: block; margin-bottom: 6px; font-size: 14px; font-weight: 500; color: #374151; }
@@ -182,26 +158,18 @@
       .list-title { font-size: 16px; font-weight: 600; margin: 0 0 12px 0; color: #111827; }
       .unit-item {
         display: flex; justify-content: space-between; align-items: center;
-        padding: 16px; background: #f9fafb; border-radius: 8px; margin-bottom: 12px;
-        border: 1px solid #e5e7eb;
+        padding: 12px; background: #f9fafb; border-radius: 4px; margin-bottom: 8px;
       }
-      .unit-info { flex: 1; display:flex; gap:12px; align-items: center; }
-      .unit-details { flex: 1; }
-      .unit-name { margin: 0 0 6px 0; font-weight: 600; color: #111827; font-size: 15px; }
-      .unit-meta { display: flex; gap: 12px; font-size: 13px; color: #6b7280; margin-bottom: 4px; }
-      .unit-price { color: #059669; font-weight: 500; }
-      .unit-conversion { color: #4f46e5; }
-      .unit-batches { color: #6366f1; font-size: 12px; }
-      .unit-thumb { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; border: 1px solid #e5e7eb; }
+      .unit-info { flex: 1; display:flex; gap:10px; align-items: center; }
+      .unit-name { margin: 0 0 4px 0; font-weight: 500; color: #111827; }
+      .unit-conversion { margin: 0; font-size: 14px; color: #6b7280; }
+      .unit-thumb { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #e5e7eb; }
 
-      .unit-actions { display: flex; gap: 8px; }
-      .unit-remove, .unit-edit {
+      .unit-remove {
         background: #ef4444; color: white; border: none; border-radius: 4px;
-        width: 32px; height: 32px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;
+        width: 28px; height: 28px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;
       }
-      .unit-edit { background: #3b82f6; }
       .unit-remove:hover { background: #dc2626; }
-      .unit-edit:hover { background: #2563eb; }
 
       .empty-state { text-align: center; padding: 20px; color: #6b7280; font-style: italic; }
 
@@ -221,13 +189,6 @@
         color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; cursor: pointer;
         display:flex; align-items:center; justify-content:center;
       }
-
-      /* Batch linking info */
-      .batch-linking-info {
-        background: #f0f9ff; padding: 10px 12px; border-radius: 4px; margin-top: 8px;
-        font-size: 12px; color: #0369a1; border: 1px solid #bae6fd;
-      }
-      .batch-linking-info strong { font-weight: 600; }
 
       @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
       @keyframes slideIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
@@ -311,35 +272,6 @@
     );
   }
 
-  function batchesColRef(ctx) {
-    const { collection } = INTEGRATIONS.FS;
-    return collection(
-      INTEGRATIONS.db,
-      "Shops", ctx.shopId,
-      "categories", ctx.categoryId,
-      "items", ctx.itemId,
-      BATCHES_COLLECTION
-    );
-  }
-
-  async function fetchActiveBatches(ctx) {
-    requireConfigured();
-    const { getDocs } = INTEGRATIONS.FS;
-    const snap = await getDocs(batchesColRef(ctx));
-    const activeBatches = [];
-    
-    snap.forEach(doc => {
-      const batch = { id: doc.id, ...doc.data() };
-      const quantity = parseFloat(batch.quantity || 0);
-      // Consider batch active if it has stock and is not explicitly inactive
-      if (quantity > 0 && batch.is_active !== false) {
-        activeBatches.push(batch);
-      }
-    });
-    
-    return activeBatches;
-  }
-
   async function fetchSellingUnits(ctx) {
     requireConfigured();
     const { getDocs } = INTEGRATIONS.FS;
@@ -347,8 +279,7 @@
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   }
 
-  // NEW: Create selling unit with batch links
-  async function createSellingUnit(ctx, { name, conversionFactor, files, price = null }) {
+  async function createSellingUnit(ctx, { name, conversionFactor, files }) {
     requireConfigured();
     const { addDoc, serverTimestamp } = INTEGRATIONS.FS;
     const user = INTEGRATIONS.auth?.currentUser || null;
@@ -361,48 +292,16 @@
     const [c1, c2] = await Promise.all([uploadToCloudinary(f1), uploadToCloudinary(f2)]);
     const images = [toImageMeta(c1), toImageMeta(c2)];
 
-    // Calculate unit price
-    let unitPrice = price || null;
-    
-    // Create batch links for all active batches
-    const batchLinks = state.activeBatches.map(batch => {
-      const batchPrice = parseFloat(batch.sell_price || 0);
-      const conversion = Number(conversionFactor);
-      let sellPrice = unitPrice;
-      
-      // If no price provided, calculate from batch price
-      if (!sellPrice && batchPrice > 0 && conversion > 0) {
-        sellPrice = (batchPrice / conversion).toFixed(2);
-      }
-      
-      return {
-        batch_id: batch.id,
-        batch_name: batch.batch_name || "Default Batch",
-        conversion_factor: conversion,
-        sell_price: sellPrice,
-        base_price: batchPrice,
-        linked_at: serverTimestamp()
-      };
-    });
-
     const data = {
       name,
-      display_name: name,
+      // store both names for compatibility with older/newer code
       conversionFactor: Number(conversionFactor),
       conversion: Number(conversionFactor),
       baseUnit: ctx.baseUnit,
       itemName: ctx.itemName,
       images,
-      batch_links: batchLinks, // AUTO-LINKED BATCHES
-      price_per_unit: unitPrice,
-      batch_count: batchLinks.length, // For easy reference
-      created_at: serverTimestamp(),
-      created_by: user ? { 
-        uid: user.uid, 
-        email: user.email || null, 
-        name: user.displayName || null 
-      } : null,
-      updated_at: serverTimestamp()
+      createdAt: serverTimestamp(),
+      createdBy: user ? { uid: user.uid, email: user.email || null, name: user.displayName || null } : null
     };
 
     const ref = await addDoc(sellingUnitsColRef(ctx), data);
@@ -494,25 +393,20 @@
     const baseUnit = getBaseUnit();
     const currentUnits = state.sellingUnits.get(state.currentItemId) || [];
 
-    // NEW: Fetch active batches first
+    const modalContent = buildModalContent(itemName, baseUnit, currentUnits);
+    elements.modal.appendChild(modalContent);
+    elements.backdrop.appendChild(elements.modal);
+    document.body.appendChild(elements.backdrop);
+    document.body.style.overflow = 'hidden';
+
+    // Fetch latest from Firestore and refresh
     try {
       state.loading = true;
-      state.activeBatches = await fetchActiveBatches(ctx);
-      console.log(`Found ${state.activeBatches.length} active batches`);
-      
-      // Then fetch selling units
       const units = await fetchSellingUnits(ctx);
       state.sellingUnits.set(state.currentItemId, units);
-      
-      const modalContent = buildModalContent(itemName, baseUnit, units);
-      elements.modal.appendChild(modalContent);
-      elements.backdrop.appendChild(elements.modal);
-      document.body.appendChild(elements.backdrop);
-      document.body.style.overflow = 'hidden';
-      
+      refreshModal();
     } catch (err) {
-      console.error("SellingUnits: failed to load", err);
-      alert("Failed to load selling units and batches");
+      console.error("SellingUnits: failed to fetch units", err);
     } finally {
       state.loading = false;
     }
@@ -537,43 +431,15 @@
 
     const body = createElement('div', { className: 'modal-body' });
 
-    // Item info
     const itemInfo = createElement('div', { className: 'item-info' }, [
       createElement('h3', { className: 'item-name', textContent: itemName }),
       createElement('p', { className: 'base-unit', textContent: `Base unit: ${baseUnit}` })
     ]);
     body.appendChild(itemInfo);
 
-    // NEW: Active batches info
-    if (state.activeBatches.length > 0) {
-      const batchesInfo = createElement('div', { className: 'batches-info' }, [
-        createElement('h4', { className: 'batches-title', textContent: '📦 Active Batches Available' }),
-        createElement('ul', { className: 'batch-list' }, 
-          state.activeBatches.map(batch => 
-            createElement('li', { 
-              className: 'batch-item',
-              textContent: `${batch.batch_name || 'Unnamed'}: ${parseFloat(batch.quantity || 0).toFixed(1)} ${baseUnit} @ Ksh ${formatPrice(batch.sell_price)}`
-            })
-          )
-        )
-      ]);
-      body.appendChild(batchesInfo);
-    } else {
-      const noBatchesInfo = createElement('div', { className: 'batches-info' }, [
-        createElement('h4', { className: 'batches-title', textContent: '⚠️ No Active Batches' }),
-        createElement('p', { 
-          className: 'batch-list', 
-          textContent: 'Add stock batches first, or create selling unit anyway (will auto-link when batches are added).' 
-        })
-      ]);
-      body.appendChild(noBatchesInfo);
-    }
-
-    // Create form
     const form = createForm(baseUnit);
     body.appendChild(form);
 
-    // Create units list
     const list = createUnitsList(sellingUnits, baseUnit);
     body.appendChild(list);
 
@@ -591,6 +457,7 @@
       type: 'file', accept: IMAGES.allowedTypes.join(','), style: { display: 'none' }
     });
 
+    // Prefer camera on mobile
     input.setAttribute('capture', 'environment');
 
     slot.addEventListener('click', () => input.click());
@@ -632,58 +499,18 @@
   function createForm(baseUnit) {
     const form = createElement('form', { className: 'selling-unit-form' });
 
-    // Name field
     const nameGroup = createElement('div', { className: 'form-group' }, [
       createElement('label', { className: 'form-label required', textContent: 'Selling Unit Name' }),
-      createElement('input', { 
-        className: 'form-input', 
-        type: 'text', 
-        placeholder: 'e.g., Piece, Packet, Box', 
-        required: true 
-      }),
-      createElement('small', { 
-        className: 'help-text', 
-        textContent: 'What customers will see (e.g., "Piece", "Packet", "Box").' 
-      })
+      createElement('input', { className: 'form-input', type: 'text', placeholder: 'e.g., Piece, Packet, Box', required: true }),
+      createElement('small', { className: 'help-text', textContent: 'What customers will see (e.g., “Piece”).' })
     ]);
-
-    // Conversion factor field
     const conversionGroup = createElement('div', { className: 'form-group' }, [
       createElement('label', { className: 'form-label required', textContent: 'Conversion Factor' }),
-      createElement('input', { 
-        className: 'form-input', 
-        type: 'number', 
-        min: '1', 
-        step: '1', 
-        placeholder: `e.g., 12 for 12 in a ${baseUnit}`, 
-        required: true 
-      }),
-      createElement('small', { 
-        className: 'help-text', 
-        textContent: `How many of this unit are in 1 ${baseUnit}?` 
-      })
+      createElement('input', { className: 'form-input', type: 'number', min: '1', step: '1', placeholder: `e.g., 12 for 12 in a ${baseUnit}`, required: true }),
+      createElement('small', { className: 'help-text', textContent: `How many of this unit are in 1 ${baseUnit}?` })
     ]);
 
-    // NEW: Price per unit field (optional)
-    const priceGroup = createElement('div', { className: 'form-group' }, [
-      createElement('label', { 
-        className: 'form-label', 
-        textContent: 'Price per Unit (Optional)' 
-      }),
-      createElement('input', { 
-        className: 'form-input', 
-        type: 'number', 
-        min: '0', 
-        step: '0.01', 
-        placeholder: 'e.g., 50.00'
-      }),
-      createElement('small', { 
-        className: 'help-text', 
-        textContent: 'Initial price. Can be updated when adding stock.' 
-      })
-    ]);
-
-    // Images section
+    // Images section (2 required)
     const imageSection = createElement('div', { className: 'image-upload-section' }, [
       createElement('div', { className: 'form-label required', textContent: 'Unit Images (2 required)' }),
       createElement('small', { className: 'help-text', textContent: `Max ${bytesToMB(IMAGES.maxSize)}MB • Formats: jpg, png, webp` }),
@@ -692,25 +519,13 @@
     const grid = imageSection.querySelector('.image-grid');
 
     const selectedFiles = [null, null];
+
     const s1 = createImageSlot('Click to add Image 1', (f) => { selectedFiles[0] = f; });
     const s2 = createImageSlot('Click to add Image 2', (f) => { selectedFiles[1] = f; });
     grid.appendChild(s1.slot);
     grid.appendChild(s2.slot);
 
-    // NEW: Batch linking info
-    const batchInfo = createElement('div', { className: 'batch-linking-info' }, [
-      createElement('div', { 
-        innerHTML: `<strong>⚠️ Auto-Batch Linking:</strong> This unit will be automatically linked to ${state.activeBatches.length} active batch(es).<br>
-                    <small>Price will be calculated from batch prices if not specified.</small>` 
-      })
-    ]);
-    imageSection.appendChild(batchInfo);
-
-    const addButton = createElement('button', { 
-      className: 'add-btn', 
-      type: 'submit', 
-      textContent: '➕ Add Selling Unit' 
-    });
+    const addButton = createElement('button', { className: 'add-btn', type: 'submit', textContent: '➕ Add Selling Unit' });
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -720,17 +535,12 @@
 
       const nameInput = nameGroup.querySelector('input');
       const convInput = conversionGroup.querySelector('input');
-      const priceInput = priceGroup.querySelector('input');
 
       const unitName = nameInput.value.trim();
       const conversionFactor = parseFloat(convInput.value);
-      const price = priceInput.value ? parseFloat(priceInput.value) : null;
 
       if (!unitName) { nameInput.focus(); return; }
-      if (!conversionFactor || conversionFactor <= 0 || !isFinite(conversionFactor)) { 
-        convInput.focus(); 
-        return; 
-      }
+      if (!conversionFactor || conversionFactor <= 0 || !isFinite(conversionFactor)) { convInput.focus(); return; }
 
       // Validate two images
       if (!selectedFiles[0] || !selectedFiles[1]) {
@@ -738,24 +548,15 @@
         return;
       }
 
-      // Confirm batch linking
-      if (state.activeBatches.length > 0) {
-        const confirmMsg = `This unit will be linked to ${state.activeBatches.length} active batch(es). Continue?`;
-        if (!confirm(confirmMsg)) return;
-      } else {
-        const confirmMsg = "No active batches found. This unit will be created without batch links. Continue?";
-        if (!confirm(confirmMsg)) return;
-      }
-
       try {
         addButton.disabled = true;
-        addButton.textContent = '💾 Saving...';
+        // Requested: turn Add → Save when clicked
+        addButton.textContent = '💾 Save...';
 
         const created = await createSellingUnit(ctx, {
           name: unitName,
           conversionFactor,
-          files: selectedFiles,
-          price: price
+          files: selectedFiles
         });
 
         const arr = state.sellingUnits.get(ctx.itemId) || [];
@@ -766,7 +567,7 @@
         // Reset form
         nameInput.value = '';
         convInput.value = '';
-        priceInput.value = '';
+        // reset image slots
         s1.input.value = '';
         s2.input.value = '';
         selectedFiles[0] = selectedFiles[1] = null;
@@ -780,16 +581,9 @@
         s2.slot.appendChild(createElement('div', { className: 'image-text', textContent: 'Click to add Image 2' }));
 
         nameInput.focus();
-        
-        // Show success message
-        const successMsg = state.activeBatches.length > 0 
-          ? `✅ "${unitName}" created and linked to ${state.activeBatches.length} batch(es)!`
-          : `✅ "${unitName}" created! (No active batches to link to)`;
-        alert(successMsg);
-        
       } catch (err) {
         console.error("SellingUnits: failed to save", err);
-        alert("Failed to save selling unit: " + err.message);
+        alert("Failed to save selling unit");
       } finally {
         addButton.disabled = false;
         addButton.textContent = '➕ Add Selling Unit';
@@ -798,7 +592,6 @@
 
     form.appendChild(nameGroup);
     form.appendChild(conversionGroup);
-    form.appendChild(priceGroup);
     form.appendChild(imageSection);
     form.appendChild(addButton);
     return form;
@@ -806,67 +599,29 @@
 
   function createUnitsList(sellingUnits, baseUnit) {
     const container = createElement('div', { className: 'units-list' });
-    container.appendChild(createElement('h3', { className: 'list-title', textContent: 'Existing Selling Units' }));
+    container.appendChild(createElement('h3', { className: 'list-title', textContent: 'Selling Units' }));
 
     if (!sellingUnits || sellingUnits.length === 0) {
-      container.appendChild(createElement('p', { 
-        className: 'empty-state', 
-        textContent: 'No selling units added yet. Create the first one!' 
-      }));
+      container.appendChild(createElement('p', { className: 'empty-state', textContent: 'No selling units added yet' }));
       return container;
     }
 
     sellingUnits.forEach((unit, index) => {
       const img = Array.isArray(unit.images) && unit.images[0] ? unit.images[0] : null;
       const thumbSrc = (img && (img.thumb || img.url)) || '';
-      
-      const batchLinks = unit.batch_links || [];
-      const hasBatches = batchLinks.length > 0;
-      const price = unit.price_per_unit || (batchLinks[0] ? batchLinks[0].sell_price : null);
-      
+
       const unitItem = createElement('div', { className: 'unit-item' }, [
         createElement('div', { className: 'unit-info' }, [
-          thumbSrc ? createElement('img', { 
-            className: 'unit-thumb', 
-            src: thumbSrc, 
-            alt: unit.name 
-          }) : createElement('div', { 
-            className: 'unit-thumb', 
-            style: { 
-              background: '#eef2ff', 
-              display:'flex', 
-              alignItems:'center', 
-              justifyContent:'center', 
-              color:'#6366f1', 
-              fontSize:'12px' 
-            } 
-          }, ['📷']),
-          createElement('div', { className: 'unit-details' }, [
+          thumbSrc ? createElement('img', { className: 'unit-thumb', src: thumbSrc, alt: unit.name }) : createElement('div', { className: 'unit-thumb', style: { background: '#eef2ff', display:'flex', alignItems:'center', justifyContent:'center', color:'#6366f1', fontSize:'12px' } }, ['📷']),
+          createElement('div', {}, [
             createElement('h4', { className: 'unit-name', textContent: unit.name }),
-            createElement('div', { className: 'unit-meta' }, [
-              price ? createElement('span', { 
-                className: 'unit-price', 
-                textContent: `Ksh ${formatPrice(price)}` 
-              }) : null,
-              createElement('span', { 
-                className: 'unit-conversion', 
-                textContent: `1 ${unit.name} = ${unit.conversionFactor ?? unit.conversion} ${baseUnit}` 
-              }),
-              createElement('span', { 
-                className: 'unit-batches', 
-                textContent: hasBatches ? `📦 Linked to ${batchLinks.length} batch(es)` : '⚠️ No batch links' 
-              })
-            ])
+            createElement('p', {
+              className: 'unit-conversion',
+              textContent: `1 ${unit.name} = ${unit.conversionFactor ?? unit.conversion} ${baseUnit}`
+            })
           ])
         ]),
-        createElement('div', { className: 'unit-actions' }, [
-          createElement('button', { 
-            className: 'unit-remove', 
-            'data-index': String(index), 
-            title: 'Remove',
-            textContent: '×' 
-          })
-        ])
+        createElement('button', { className: 'unit-remove', 'data-index': String(index), title: 'Remove' }, ['×'])
       ]);
 
       unitItem.querySelector('.unit-remove').addEventListener('click', () => removeSellingUnit(index));
@@ -876,7 +631,7 @@
     return container;
   }
 
-  // ========= Data operations =========
+  // ========= Data ops for list =========
   async function removeSellingUnit(index) {
     const ctx = resolveItemContext();
     if (!ctx) return;
@@ -885,14 +640,13 @@
     const unit = arr[index];
     if (!unit) return;
 
-    if (!confirm(`Remove selling unit "${unit.name}"? This will also remove all batch links.`)) return;
+    if (!confirm(`Remove selling unit "${unit.name}"?`)) return;
 
     try {
       if (unit.id) await deleteSellingUnitDoc(ctx, unit.id);
       arr.splice(index, 1);
       state.sellingUnits.set(ctx.itemId, arr);
       refreshModal();
-      alert(`✅ "${unit.name}" removed successfully`);
     } catch (err) {
       console.error("SellingUnits: failed to delete", err);
       alert("Failed to delete selling unit");
@@ -941,7 +695,7 @@
       elements.button = null;
     }
     closeModal();
-    const styles = document.getElementById('selling-units-styles-v4');
+    const styles = document.getElementById('selling-units-styles');
     if (styles) styles.parentNode?.removeChild(styles);
   }
 
@@ -954,7 +708,7 @@
       if (existing) injectButton(existing);
 
       setupObservers();
-      console.log('Selling Units Manager v4.0 initialized (with auto-batch linking)');
+      console.log('Selling Units manager initialized (Firestore + Cloudinary, 2 required images)');
     } catch (err) {
       console.error('Failed to initialize Selling Units manager:', err);
     }
@@ -967,62 +721,5 @@
   }
 
   window.sellingUnitsCleanup = cleanup;
-
-  // NEW: Export utility function to fix existing selling units
-  window.fixSellingUnitsBatchLinks = async function(shopId, categoryId, itemId) {
-    requireConfigured();
-    const { getDocs, updateDoc, doc, collection, serverTimestamp } = INTEGRATIONS.FS;
-    
-    const batchesRef = collection(INTEGRATIONS.db, "Shops", shopId, "categories", categoryId, "items", itemId, "batches");
-    const suRef = collection(INTEGRATIONS.db, "Shops", shopId, "categories", categoryId, "items", itemId, "sellUnits");
-    
-    const [batchesSnap, suSnap] = await Promise.all([
-      getDocs(batchesRef),
-      getDocs(suRef)
-    ]);
-    
-    const activeBatches = [];
-    batchesSnap.forEach(doc => {
-      const batch = { id: doc.id, ...doc.data() };
-      const quantity = parseFloat(batch.quantity || 0);
-      if (quantity > 0 && batch.is_active !== false) {
-        activeBatches.push(batch);
-      }
-    });
-    
-    const updates = [];
-    suSnap.forEach(docSnap => {
-      const su = docSnap.data();
-      if (!su.batch_links || su.batch_links.length === 0) {
-        const batchLinks = activeBatches.map(batch => {
-          const conversion = su.conversionFactor || su.conversion || 1;
-          const batchPrice = parseFloat(batch.sell_price || 0);
-          const sellPrice = batchPrice > 0 && conversion > 0 ? (batchPrice / conversion).toFixed(2) : null;
-          
-          return {
-            batch_id: batch.id,
-            batch_name: batch.batch_name || "Default Batch",
-            conversion_factor: conversion,
-            sell_price: sellPrice,
-            base_price: batchPrice,
-            linked_at: serverTimestamp()
-          };
-        });
-        
-        updates.push(
-          updateDoc(doc(INTEGRATIONS.db, "Shops", shopId, "categories", categoryId, "items", itemId, "sellUnits", docSnap.id), {
-            batch_links: batchLinks,
-            batch_count: batchLinks.length,
-            updated_at: serverTimestamp()
-          })
-        );
-        console.log(`Fixing selling unit: ${su.name}`);
-      }
-    });
-    
-    await Promise.all(updates);
-    alert(`✅ Fixed ${updates.length} selling units with batch links`);
-    console.log(`Fixed ${updates.length} selling units`);
-  };
 
 })();

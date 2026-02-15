@@ -1,5 +1,5 @@
-// sales.js - SMART BATCH-AWARE SALES SYSTEM WITH BACKEND INTEGRATION
-// UPDATED FOR SELLING UNIT BATCH SWITCHING FIX
+// sales.js - ONE-TAP BATCH-AWARE SALES SYSTEM (FIXED STOCK CHECKING LOGIC)
+// EMERGENCY FIX: Added backend data mismatch handling
 
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { db } from "./firebase-config.js";
@@ -12,47 +12,48 @@ let salesOverlay = null;
 let searchTimeout = null;
 let currentShopId = null;
 let currentUser = null;
-let currentCartId = null;
-let currentSearchResults = []; // Store current search results
-let currentSearchQuery = ""; // Store current search query
 
 const NAV_HEIGHT = 64;
-
-// ====================================================
-// CART ID MANAGEMENT
-// ====================================================
-
-function getCurrentCartId() {
-    if (!currentCartId) {
-        currentCartId = localStorage.getItem('current_cart_id');
-        if (!currentCartId) {
-            currentCartId = 'cart_' + Date.now();
-            localStorage.setItem('current_cart_id', currentCartId);
-        }
-    }
-    return currentCartId;
-}
 
 // ====================================================
 // FLOATING POINT PRECISION FIX
 // ====================================================
 
 function safeFloat(value) {
+    // Fix floating point precision issues
     if (typeof value !== 'number') return 0;
+    
+    // Round to 10 decimal places to avoid floating point errors
     return Math.round(value * 10000000000) / 10000000000;
 }
 
+function safeCompare(a, b, threshold = 0.0000001) {
+    // Compare numbers with tolerance for floating point errors
+    return Math.abs(safeFloat(a) - safeFloat(b)) < threshold;
+}
+
 // ====================================================
-// BATCH INTELLIGENCE - UPDATED FOR SMART BACKEND
+// BATCH INTELLIGENCE - SEPARATE TRACKING FOR BASE VS SELLING UNITS
 // ====================================================
 
-class SmartBatchIntelligence {
+class BatchIntelligence {
     constructor() {
-        this.baseItemBatchState = new Map();
-        this.sellingUnitBatchState = new Map();
+        // SEPARATE tracking for base items vs selling units
+        this.baseItemBatchState = new Map();   // item_id -> {currentBatchId, tapsCount}
+        this.sellingUnitBatchState = new Map(); // item_id_sell_unit_id -> {currentBatchId, tapsCount}
+    }
+    
+    getItemKey(item) {
+        // DIFFERENT KEYS for base vs selling unit
+        if (item.type === 'selling_unit') {
+            return `${item.item_id}_${item.sell_unit_id}`;
+        } else {
+            return `${item.item_id}_main`;
+        }
     }
     
     getBatchKey(item) {
+        // DIFFERENT batch tracking for base vs selling unit
         if (item.type === 'selling_unit') {
             return `${item.item_id}_${item.sell_unit_id}_batch`;
         } else {
@@ -61,105 +62,125 @@ class SmartBatchIntelligence {
     }
     
     prepareItemForCart(item) {
+        const itemKey = this.getItemKey(item);
         const batchKey = this.getBatchKey(item);
+        
+        // Get appropriate state map
         const stateMap = item.type === 'selling_unit' 
             ? this.sellingUnitBatchState 
             : this.baseItemBatchState;
         
+        // Get current batch state
         const currentState = stateMap.get(batchKey) || {
             currentBatchId: item.batch_id,
             tapsCount: 0,
             lastBatchId: item.batch_id
         };
         
-        console.log(`🧠 Smart batch analysis for ${item.name}:`, {
+        console.log(`📦 Batch analysis for ${item.name} (${item.type})`, {
             type: item.type,
-            can_fulfill: item.can_fulfill,
-            batch_switch_required: item.batch_switch_required,
-            real_available: item.real_available,
-            notifications: item.notifications?.length || 0
+            batchStatus: item.batch_status,
+            currentBatch: item.batch_id,
+            currentBatchRemaining: item.batch_remaining,
+            safeCurrentBatchRemaining: safeFloat(item.batch_remaining || 0),
+            nextBatchAvailable: item.next_batch_available,
+            nextBatchRemaining: item.next_batch_remaining,
+            safeNextBatchRemaining: safeFloat(item.next_batch_remaining || 0),
+            nextBatchPrice: item.next_batch_price
         });
         
-        // ✅ TRUST BACKEND'S DECISION FIRST
-        if (item.can_fulfill === false && item.batch_switch_required && item.next_batch_id) {
-            console.log(`🔄 Backend recommends batch switch to ${item.next_batch_id}`);
-            
-            const switchedItem = {
-                ...item,
-                batch_id: item.next_batch_id,
-                batchId: item.next_batch_id,
-                price: item.next_batch_price,
-                batch_remaining: item.next_batch_remaining,
-                batch_name: item.next_batch_name,
-                next_batch_available: false,
-                _batch_switched: true,
-                _previous_batch_id: item.batch_id
-            };
-            
-            stateMap.set(batchKey, {
-                ...currentState,
-                currentBatchId: item.next_batch_id,
-                lastBatchId: item.batch_id,
-                tapsCount: 0
-            });
-            
-            return {
-                item: switchedItem,
-                action: 'switch_and_add',
-                message: this.getSwitchMessage(item)
-            };
-        }
+        // ====================================================
+        // ⚠️ EMERGENCY FIX: Handle backend/frontend data mismatch
+        // ====================================================
         
-        // ✅ Backend says we can fulfill from current batch
-        if (item.can_fulfill === true) {
-            stateMap.set(batchKey, {
-                ...currentState,
-                tapsCount: currentState.tapsCount + 1
-            });
+        // For BASE UNITS ONLY: If backend reports any issue, auto-switch proactively
+        if ((item.type === 'base' || item.type === 'main_item')) {
+            const currentStock = safeFloat(item.batch_remaining || 0);
+            const hasNextBatch = item.next_batch_available;
+            const nextStock = safeFloat(item.next_batch_remaining || 0);
             
-            let action = 'add_current_batch';
-            let message = '';
-            
-            // Check for low stock notifications
-            if (item.notifications && item.notifications.length > 0) {
-                const lowStockNotif = item.notifications.find(n => 
-                    n.type === 'low_stock_warning' || n.severity === 'warning'
-                );
-                if (lowStockNotif) {
-                    action = 'add_with_warning';
-                    message = lowStockNotif.message;
-                }
+            // ⚠️ CRITICAL: If batch_status indicates exhausted, force auto-switch
+            if (item.batch_status === 'exhausted' && hasNextBatch && nextStock >= 0.999999) {
+                console.log(`🚨 EMERGENCY: Backend reports batch exhausted, forcing auto-switch`);
+                
+                const switchedItem = {
+                    ...item,
+                    batch_id: item.next_batch_id,
+                    batchId: item.next_batch_id,
+                    price: item.next_batch_price,
+                    batch_remaining: item.next_batch_remaining,
+                    batch_name: item.next_batch_name,
+                    next_batch_available: false,
+                    next_batch_id: null,
+                    next_batch_price: null,
+                    next_batch_remaining: null,
+                    next_batch_name: null,
+                    _batch_switched: true,
+                    _previous_batch_id: item.batch_id,
+                    _previous_price: item.price,
+                    _previous_stock: currentStock,
+                    _emergency_switch: true
+                };
+                
+                stateMap.set(batchKey, {
+                    ...currentState,
+                    currentBatchId: item.next_batch_id,
+                    lastBatchId: item.batch_id,
+                    tapsCount: 0
+                });
+                
+                return {
+                    item: switchedItem,
+                    action: 'switch_and_add',
+                    message: `Emergency auto-switch: Backend reports batch exhausted`
+                };
             }
             
-            return {
-                item: item,
-                action: action,
-                message: message
-            };
+            // ⚠️ PROACTIVE SWITCH: If current batch shows low stock AND next batch is available, switch early
+            if (currentStock < 2 && hasNextBatch && nextStock >= 0.999999) {
+                console.log(`⚠️ PROACTIVE SWITCH: Current batch low (${currentStock}), next batch available (${nextStock})`);
+                
+                const switchedItem = {
+                    ...item,
+                    batch_id: item.next_batch_id,
+                    batchId: item.next_batch_id,
+                    price: item.next_batch_price,
+                    batch_remaining: item.next_batch_remaining,
+                    batch_name: item.next_batch_name,
+                    next_batch_available: false,
+                    next_batch_id: null,
+                    next_batch_price: null,
+                    next_batch_remaining: null,
+                    next_batch_name: null,
+                    _batch_switched: true,
+                    _previous_batch_id: item.batch_id,
+                    _previous_price: item.price,
+                    _previous_stock: currentStock,
+                    _proactive_switch: true
+                };
+                
+                stateMap.set(batchKey, {
+                    ...currentState,
+                    currentBatchId: item.next_batch_id,
+                    lastBatchId: item.batch_id,
+                    tapsCount: 0
+                });
+                
+                return {
+                    item: switchedItem,
+                    action: 'switch_and_add',
+                    message: `Proactive auto-switch to prevent stock issues`
+                };
+            }
         }
         
-        // ⚠️ Fallback for old backend compatibility
-        console.warn('⚠️ Using fallback logic - backend may be outdated');
-        return this.fallbackPrepareItemForCart(item, stateMap, currentState);
-    }
-    
-    getSwitchMessage(item) {
-        if (item.notifications && item.notifications.length > 0) {
-            const switchNotif = item.notifications.find(n => 
-                n.type.includes('switch') || n.type.includes('insufficient')
-            );
-            if (switchNotif) return switchNotif.message;
-        }
+        // ✅ CORRECT LOGIC: Check stock numbers directly WITH FLOATING POINT FIX
         
-        return `Auto-switched to ${item.next_batch_name || 'next batch'} ($${item.next_batch_price?.toFixed(2) || item.price?.toFixed(2)})`;
-    }
-    
-    fallbackPrepareItemForCart(item, stateMap, currentState) {
-        // Keep old emergency logic as fallback only
-        const stock = safeFloat(item.batch_remaining || 0);
-        
+        // For SELLING UNITS: Just check if stock > 0 (with tolerance)
         if (item.type === 'selling_unit') {
-            if (stock <= 0.000001) {
+            const stock = safeFloat(item.available_stock || item.batch_remaining || 0);
+            if (stock <= 0.000001) { // Use tolerance for floating point
+                console.log(`❌ Selling unit ${item.name} has no stock (${stock})`);
                 return {
                     item: item,
                     action: 'cannot_add',
@@ -167,6 +188,7 @@ class SmartBatchIntelligence {
                 };
             }
             
+            // Normal case - add from current batch
             stateMap.set(batchKey, {
                 ...currentState,
                 tapsCount: currentState.tapsCount + 1
@@ -179,27 +201,138 @@ class SmartBatchIntelligence {
             };
         }
         
-        // Base unit fallback logic
-        if (stock >= 0.999999) {
-            stateMap.set(batchKey, {
-                ...currentState,
-                tapsCount: currentState.tapsCount + 1
-            });
+        // For BASE UNITS: Complex stock checking WITH FLOATING POINT FIX
+        if (item.type === 'base' || item.type === 'main_item') {
+            const currentStock = safeFloat(item.batch_remaining || 0);
             
+            // 1. Check if current batch has ≥ 1 unit (with tolerance)
+            if (currentStock >= 0.999999) { // Use 0.999999 instead of 1
+                console.log(`✅ Current batch has enough stock: ${currentStock} (≥ 0.999999)`);
+                stateMap.set(batchKey, {
+                    ...currentState,
+                    tapsCount: currentState.tapsCount + 1
+                });
+                
+                let action = 'add_current_batch';
+                let message = '';
+                
+                if (currentStock < 1.999999) { // Last or almost last (with tolerance)
+                    action = 'add_with_warning';
+                    message = `Last item in ${item.batch_name || 'current batch'}!`;
+                }
+                
+                return {
+                    item: item,
+                    action: action,
+                    message: message
+                };
+            }
+            
+            // 2. Current batch < 1, check if next batch available with ≥ 1 unit
+            if (currentStock < 0.999999 && item.next_batch_available) {
+                const nextStock = safeFloat(item.next_batch_remaining || 0);
+                
+                if (nextStock >= 0.999999) {
+                    console.log(`🔄 Auto-switch: Current batch ${currentStock}, Next batch ${nextStock}`);
+                    
+                    // Create switched item with new batch details
+                    const switchedItem = {
+                        ...item, // This copies ALL properties including category_id, category_name
+                        batch_id: item.next_batch_id,
+                        batchId: item.next_batch_id,
+                        price: item.next_batch_price,
+                        batch_remaining: item.next_batch_remaining,
+                        batch_name: item.next_batch_name,
+                        // Clear next batch info since we're switching to it
+                        next_batch_available: false,
+                        next_batch_id: null,
+                        next_batch_price: null,
+                        next_batch_remaining: null,
+                        next_batch_name: null,
+                        // Metadata for tracking
+                        _batch_switched: true,
+                        _previous_batch_id: item.batch_id,
+                        _previous_price: item.price,
+                        _previous_stock: currentStock
+                    };
+                    
+                    // Update batch state
+                    stateMap.set(batchKey, {
+                        ...currentState,
+                        currentBatchId: item.next_batch_id,
+                        lastBatchId: item.batch_id,
+                        tapsCount: 0 // Reset for new batch
+                    });
+                    
+                    return {
+                        item: switchedItem,
+                        action: 'switch_and_add',
+                        message: `Auto-switched to ${item.next_batch_name || 'new batch'} (${nextStock} units available)`
+                    };
+                } else {
+                    console.log(`❌ Next batch also insufficient: ${nextStock} units (< 0.999999)`);
+                }
+            }
+            
+            // 3. Special case: Current batch is basically 0 due to floating point error
+            if (currentStock < 0.000001 && item.next_batch_available) {
+                console.log(`⚠️ Current batch effectively 0 (${currentStock}), checking next batch...`);
+                const nextStock = safeFloat(item.next_batch_remaining || 0);
+                if (nextStock >= 0.999999) {
+                    console.log(`🔄 Auto-switch triggered for floating point error`);
+                    // Same auto-switch logic as above
+                    const switchedItem = {
+                        ...item,
+                        batch_id: item.next_batch_id,
+                        batchId: item.next_batch_id,
+                        price: item.next_batch_price,
+                        batch_remaining: item.next_batch_remaining,
+                        batch_name: item.next_batch_name,
+                        next_batch_available: false,
+                        next_batch_id: null,
+                        next_batch_price: null,
+                        next_batch_remaining: null,
+                        next_batch_name: null,
+                        _batch_switched: true,
+                        _previous_batch_id: item.batch_id,
+                        _previous_price: item.price,
+                        _previous_stock: currentStock
+                    };
+                    
+                    stateMap.set(batchKey, {
+                        ...currentState,
+                        currentBatchId: item.next_batch_id,
+                        lastBatchId: item.batch_id,
+                        tapsCount: 0
+                    });
+                    
+                    return {
+                        item: switchedItem,
+                        action: 'switch_and_add',
+                        message: `Auto-switched to ${item.next_batch_name || 'new batch'} (${nextStock} units available)`
+                    };
+                }
+            }
+            
+            // 4. No batch with ≥ 1 unit available
+            console.log(`❌ No batch with sufficient stock. Current: ${currentStock}`);
             return {
                 item: item,
-                action: stock < 1.999999 ? 'add_with_warning' : 'add_current_batch',
-                message: stock < 1.999999 ? 'Last item in batch!' : ''
+                action: 'cannot_add',
+                message: 'Insufficient stock in any batch'
             };
         }
         
+        // Fallback for unknown types
+        console.warn(`Unknown item type: ${item.type}`);
         return {
             item: item,
-            action: 'cannot_add',
-            message: 'Insufficient stock'
+            action: 'add_current_batch',
+            message: ''
         };
     }
     
+    // Clear batch tracking for a specific item
     clearItemTracking(item) {
         const batchKey = this.getBatchKey(item);
         const stateMap = item.type === 'selling_unit' 
@@ -209,272 +342,171 @@ class SmartBatchIntelligence {
     }
 }
 
-// Initialize smart batch intelligence
-const batchIntelligence = new SmartBatchIntelligence();
+// Initialize batch intelligence
+const batchIntelligence = new BatchIntelligence();
 
 // ====================================================
-// SMART STOCK CHECKING (USES BACKEND DATA)
+// HELPER FUNCTIONS FOR ONE-TAP
 // ====================================================
 
-function canAddToCart(item) {
-    // ✅ PRIMARY: Use backend's smart calculation
-    if (item.can_fulfill !== undefined) {
-        console.log(`✅ Backend can_fulfill: ${item.can_fulfill}`);
-        return item.can_fulfill;
+function getItemStock(item) {
+    let stock = 0;
+    
+    if (item.type === 'selling_unit') {
+        stock = item.available_stock || 0;
+    } else {
+        stock = item.batch_remaining || item.stock || 0;
     }
     
-    // ⚠️ FALLBACK: For backward compatibility
-    console.log('⚠️ Using fallback stock check');
-    const stock = item.real_available !== undefined ? item.real_available : item.batch_remaining;
-    return safeFloat(stock) >= 0.999999;
-}
-
-function getStockColor(item) {
-    // Check backend notifications first
-    if (item.notifications && item.notifications.length > 0) {
-        const urgentNotif = item.notifications.find(n => n.severity === 'error');
-        if (urgentNotif) return '#e74c3c';
-        
-        const warningNotif = item.notifications.find(n => n.severity === 'warning');
-        if (warningNotif) return '#ff9f43';
-    }
-    
-    // Use backend's can_fulfill flag
-    if (item.can_fulfill === false) {
-        if (item.batch_switch_required && item.next_batch_available) {
-            return '#9b59b6'; // Auto-switch ready
-        }
-        
-        // Check for partial availability in selling units
-        if (item.type === 'selling_unit' && item.real_available_fraction > 0) {
-            return '#ff9f43'; // Partial stock - warning color
-        }
-        
-        return '#ff6b6b'; // Cannot add
-    }
-    
-    // Good stock
-    const stock = item.real_available !== undefined ? item.real_available : item.batch_remaining;
-    if (stock >= 10) return '#2ed573';
-    if (stock >= 1) return '#ffa502';
-    
-    return '#ff6b6b';
-}
-
-function getStockText(item) {
-    // Use backend notifications first
-    if (item.notifications && item.notifications.length > 0) {
-        const stockNotif = item.notifications.find(n => 
-            n.type === 'low_stock_warning' || 
-            n.type === 'insufficient_for_base' ||
-            n.type === 'insufficient_for_selling_unit'
-        );
-        if (stockNotif) return stockNotif.message;
-    }
-    
-    // Special handling for selling units with partial stock
-    if (item.type === 'selling_unit' && item.real_available_fraction > 0) {
-        const totalAvailable = (item.real_available_units || 0) + item.real_available_fraction;
-        return `Partial: ${totalAvailable.toFixed(2)} units (needs ${item.conversion_factor || 1} for full unit)`;
-    }
-    
-    // Fallback text
-    const stock = item.real_available !== undefined ? item.real_available : item.batch_remaining;
-    
-    if (item.can_fulfill === false) {
-        if (item.batch_switch_required && item.next_batch_available) {
-            return '🔄 Auto-switch ready';
-        }
-        return '❌ Out of stock';
-    }
-    
-    if (stock < 2) return '🚨 Low stock';
-    return `Stock: ${stock.toFixed(2)}`;
+    return safeFloat(stock);
 }
 
 function getItemPrice(item) {
     return safeFloat(item.price || item.sellPrice || item.sell_price || 0);
 }
 
-// ====================================================
-// SELLING UNIT BATCH SWITCHING HELPER
-// ====================================================
-
-async function findBestBatchForSellingUnit(item) {
-    if (item.type !== 'selling_unit') {
-        return {
-            batch_id: item.batch_id,
-            batch_name: item.batch_name,
-            batch_switched: false
-        };
+function getStockColor(item) {
+    const stock = getItemStock(item);
+    
+    // For selling units: any stock > 0 is good
+    if (item.type === 'selling_unit') {
+        if (stock > 0.000001) return '#2ed573'; // Green (with tolerance)
+        return '#ff6b6b'; // Red
     }
     
-    console.log('🔍 Finding best batch for selling unit:', {
-        name: item.display_name || item.name,
-        conversion_factor: item.conversion_factor
+    // For base units: check if can sell
+    if (canAddToCart(item)) {
+        if (stock >= 10) return '#2ed573';  // Green (good stock)
+        if (stock >= 0.999999) return '#ffa502';   // Yellow (low but sellable, with tolerance)
+        // Stock < 1 but can auto-switch
+        if (item.next_batch_available && safeFloat(item.next_batch_remaining || 0) >= 0.999999) {
+            return '#9b59b6'; // Purple (auto-switch ready)
+        }
+    }
+    
+    return '#ff6b6b'; // Red (cannot sell)
+}
+
+function getStockText(item) {
+    const stock = getItemStock(item);
+    
+    if (item.type === 'selling_unit') {
+        const unitName = item.display_name || item.name;
+        if (stock > 0.000001) return `Available: ${stock.toFixed(6)} ${unitName}`;
+        return '❌ Out of stock';
+    }
+    
+    // For base units
+    if (canAddToCart(item)) {
+        if (stock >= 0.999999) {
+            if (stock < 1.999999) return '🚨 Last item in batch!';
+            return `Stock: ${stock.toFixed(2)}`;
+        }
+        
+        // Stock < 1 but can auto-switch
+        if (item.next_batch_available && safeFloat(item.next_batch_remaining || 0) >= 0.999999) {
+            return `🔄 Auto-switch ready (${item.next_batch_remaining} available)`;
+        }
+    }
+    
+    return '❌ Out of stock';
+}
+
+function canAddToCart(item) {
+    console.log(`🔍 Stock check for ${item.name} (${item.type}):`, {
+        type: item.type,
+        batch_remaining: item.batch_remaining,
+        safe_batch_remaining: safeFloat(item.batch_remaining || 0),
+        next_batch_available: item.next_batch_available,
+        next_batch_remaining: item.next_batch_remaining,
+        safe_next_batch_remaining: safeFloat(item.next_batch_remaining || 0),
+        available_stock: item.available_stock,
+        safe_available_stock: safeFloat(item.available_stock || 0),
+        batch_status: item.batch_status  // Added for emergency fix
     });
     
-    try {
-        // Get fresh batch data from Firestore
-        const itemRef = doc(
-            db,
-            "Shops",
-            currentShopId,
-            "categories",
-            item.category_id,
-            "items",
-            item.item_id
-        );
-        
-        const itemDoc = await getDoc(itemRef);
-        if (!itemDoc.exists()) {
-            console.log('❌ Item not found in Firestore');
-            return {
-                batch_id: item.batch_id,
-                batch_name: item.batch_name,
-                batch_switched: false
-            };
-        }
-        
-        const itemData = itemDoc.data();
-        const batches = itemData.batches || [];
-        const conversionFactor = parseFloat(item.conversion_factor || 1);
-        
-        console.log(`📊 Item has ${batches.length} batches, conversion: ${conversionFactor}`);
-        
-        if (batches.length === 0) {
-            console.log('⚠️ No batches found for item');
-            return {
-                batch_id: item.batch_id,
-                batch_name: item.batch_name,
-                batch_switched: false
-            };
-        }
-        
-        // Find batches that can provide at least 1 selling unit
-        const viableBatches = batches.filter(batch => {
-            const batchQty = parseFloat(batch.quantity || 0);
-            // CORRECT: Multiply by conversion factor to get available selling units
-            const availableSellingUnits = batchQty * conversionFactor;
-            console.log(`   Batch ${batch.id}: ${batchQty} base units → ${availableSellingUnits} selling units`);
-            return availableSellingUnits >= 1;
-        });
-        
-        console.log(`📊 Found ${viableBatches.length} viable batches with stock`);
-        
-        // If current batch is viable, use it
-        const currentBatch = batches.find(b => b.id === item.batch_id);
-        if (currentBatch) {
-            const currentBatchQty = parseFloat(currentBatch.quantity || 0);
-            const currentAvailableUnits = currentBatchQty * conversionFactor;
-            console.log(`📊 Current batch ${currentBatch.id}: ${currentBatchQty} base units → ${currentAvailableUnits} selling units`);
-            
-            if (currentAvailableUnits >= 1) {
-                console.log(`✅ Using current batch (has ${currentAvailableUnits} selling units available)`);
-                return {
-                    batch_id: currentBatch.id,
-                    batch_name: currentBatch.name || currentBatch.batch_name || `Batch ${currentBatch.id.substring(0, 4)}`,
-                    batch_remaining: currentBatchQty,
-                    real_available: currentAvailableUnits,
-                    batch_switched: false
-                };
+    // For SELLING UNITS: Any stock > 0 (with floating point tolerance)
+    if (item.type === 'selling_unit') {
+        const stock = safeFloat(item.available_stock || item.batch_remaining || 0);
+        // Use > 0.000001 instead of > 0 to handle floating point errors
+        const canSell = stock > 0.000001;
+        console.log(`📦 Selling unit check: ${stock} > 0.000001 = ${canSell}`);
+        return canSell;
+    }
+    
+    // For BASE UNITS: need ≥ 1 unit somewhere (with tolerance)
+    const currentStock = safeFloat(item.batch_remaining || 0);
+    
+    // ⚠️ CRITICAL FIX: If batch_status says exhausted, check next batch even if frontend shows stock
+    if (item.batch_status === 'exhausted' || item.batch_status === 'all_exhausted') {
+        console.log(`⚠️ Batch status is '${item.batch_status}', checking next batch...`);
+        if (item.next_batch_available) {
+            const nextStock = safeFloat(item.next_batch_remaining || 0);
+            if (nextStock >= 0.999999) {
+                console.log(`🔄 Can add via next batch: ${nextStock} ≥ 0.999999`);
+                return true;
             }
         }
-        
-        if (viableBatches.length === 0) {
-            console.log('⚠️ No batches have enough stock for even 1 selling unit');
-            // Use the batch with highest stock anyway
-            const sortedByStock = [...batches].sort((a, b) => 
-                parseFloat(b.quantity || 0) - parseFloat(a.quantity || 0)
-            );
-            const fallbackBatch = sortedByStock[0];
-            const availableUnits = parseFloat(fallbackBatch.quantity || 0) * conversionFactor;
-            
-            return {
-                batch_id: fallbackBatch.id,
-                batch_name: fallbackBatch.name || fallbackBatch.batch_name || `Batch ${fallbackBatch.id.substring(0, 4)}`,
-                batch_remaining: parseFloat(fallbackBatch.quantity || 0),
-                real_available: availableUnits,
-                batch_switched: false,
-                can_fulfill: false // Mark as can't fulfill
-            };
-        }
-        
-        // Sort viable batches by highest stock first
-        const sortedBatches = viableBatches.sort((a, b) => 
-            parseFloat(b.quantity || 0) - parseFloat(a.quantity || 0)
-        );
-        
-        const bestBatch = sortedBatches[0];
-        const batchQty = parseFloat(bestBatch.quantity || 0);
-        const availableUnits = batchQty * conversionFactor;
-        
-        console.log(`✅ Selected batch ${bestBatch.id}: ${batchQty} base units → ${availableUnits} selling units`);
-        
-        return {
-            batch_id: bestBatch.id,
-            batch_name: bestBatch.name || bestBatch.batch_name || `Batch ${bestBatch.id.substring(0, 4)}`,
-            batch_remaining: batchQty,
-            real_available: availableUnits,
-            batch_switched: bestBatch.id !== item.batch_id,
-            can_fulfill: true
-        };
-        
-    } catch (error) {
-        console.error('❌ Error finding best batch:', error);
-        return {
-            batch_id: item.batch_id,
-            batch_name: item.batch_name,
-            batch_switched: false
-        };
+        return false;
     }
+    
+    // 1. Current batch has ≥ 1 unit (with tolerance)
+    if (currentStock >= 0.999999) {
+        console.log(`✅ Current batch has ${currentStock} ≥ 0.999999`);
+        return true;
+    }
+    
+    // 2. Current batch < 1, but next batch has ≥ 1 unit (with tolerance)
+    if (currentStock < 0.999999 && item.next_batch_available) {
+        const nextStock = safeFloat(item.next_batch_remaining || 0);
+        if (nextStock >= 0.999999) {
+            console.log(`🔄 Next batch has ${nextStock} ≥ 0.999999`);
+            return true;
+        }
+    }
+    
+    // 3. Special case: Current batch is basically 0 due to floating point error
+    if (currentStock < 0.000001 && item.next_batch_available) {
+        const nextStock = safeFloat(item.next_batch_remaining || 0);
+        if (nextStock >= 0.999999) {
+            console.log(`🔄 Floating point fix: current=${currentStock} (≈0), next=${nextStock} ≥ 0.999999`);
+            return true;
+        }
+    }
+    
+    // 4. Cannot sell
+    console.log(`❌ No stock available: current=${currentStock}, next_available=${item.next_batch_available}`);
+    return false;
 }
 
 // ====================================================
-// ONE-TAP ITEM HANDLER (UPDATED WITH BATCH SWITCHING)
+// ONE-TAP ITEM HANDLER - FIXED WITH SEPARATE CART ENTRIES
 // ====================================================
 
 async function handleOneTap(item) {
     console.group(`ONE-TAP: ${item.name} (${item.type})`);
-    console.log('Smart item data:', {
+    console.log('Item received:', {
         type: item.type,
+        item_id: item.item_id,
+        sell_unit_id: item.sell_unit_id,
         batch_id: item.batch_id,
-        can_fulfill: item.can_fulfill,
-        batch_switch_required: item.batch_switch_required,
-        notifications: item.notifications,
-        is_current_batch: item.is_current_batch,
-        search_score: item.search_score || 0
+        price: item.price,
+        safe_price: safeFloat(item.price || 0),
+        batch_remaining: item.batch_remaining,
+        safe_batch_remaining: safeFloat(item.batch_remaining || 0),
+        next_batch_available: item.next_batch_available,
+        next_batch_remaining: item.next_batch_remaining,
+        safe_next_batch_remaining: safeFloat(item.next_batch_remaining || 0),
+        batch_status: item.batch_status  // Added for debugging
     });
     
-    // SPECIAL HANDLING FOR SELLING UNITS: Find best batch
-    let selectedBatchInfo = {
-        batch_id: item.batch_id,
-        batch_name: item.batch_name,
-        batch_switched: false
-    };
+    // Debug: Check if we can add to cart BEFORE calling prepareItemForCart
+    console.log('🔍 Pre-check canAddToCart:', canAddToCart(item));
     
-    if (item.type === 'selling_unit') {
-        selectedBatchInfo = await findBestBatchForSellingUnit(item);
-        console.log('🔍 Selected batch for selling unit:', selectedBatchInfo);
-        
-        // Update item with selected batch info
-        if (selectedBatchInfo.batch_switched) {
-            console.log(`🔄 Batch switched from ${item.batch_id} to ${selectedBatchInfo.batch_id}`);
-            
-            // Update item with new batch info for cart preparation
-            item = {
-                ...item,
-                batch_id: selectedBatchInfo.batch_id,
-                batch_name: selectedBatchInfo.batch_name,
-                batch_remaining: selectedBatchInfo.batch_remaining,
-                real_available: selectedBatchInfo.real_available,
-                can_fulfill: selectedBatchInfo.can_fulfill !== false
-            };
-        }
-    }
-    
+    // Get batch intelligence decision
     const { item: cartItem, action, message } = batchIntelligence.prepareItemForCart(item);
     
+    // Check if we can add to cart
     if (action === 'cannot_add') {
         console.log('❌ Cannot add to cart:', message);
         showNotification(message || 'Item out of stock!', 'error');
@@ -482,93 +514,134 @@ async function handleOneTap(item) {
         return false;
     }
     
-    // Create unique cart entry ID
+    // ✅ CRITICAL: Create UNIQUE cart entry ID
     const uniqueCartId = cartItem.type === 'selling_unit' 
         ? `${cartItem.item_id}_${cartItem.sell_unit_id}_${cartItem.batch_id}`
         : `${cartItem.item_id}_main_${cartItem.batch_id}`;
     
-    // Enrich item with all required fields
+    // ENSURE ALL REQUIRED FIELDS ARE PRESENT
     const enrichedItem = {
+        // ✅ UNIQUE ID for cart (differentiates base vs selling unit)
         id: uniqueCartId,
         cart_item_id: uniqueCartId,
-        item_id: cartItem.item_id,
-        main_item_id: cartItem.main_item_id || cartItem.item_id,
-        name: cartItem.name,
-        display_name: cartItem.display_name || cartItem.name,
-        quantity: 1,
-        sellPrice: cartItem.price || cartItem.sellPrice || cartItem.sell_price || 0,
+        
+        // Core IDs
+        item_id: cartItem.item_id || item.item_id,
+        main_item_id: cartItem.main_item_id || item.main_item_id || cartItem.item_id || item.item_id,
+        
+        // Names
+        name: cartItem.name || item.name,
+        display_name: cartItem.display_name || item.display_name || cartItem.name || item.name,
+        
+        // Quantity & Pricing
+        quantity: 1, // Always 1 for one-tap
+        sellPrice: cartItem.sellPrice || cartItem.sell_price || cartItem.price || 0,
+        sell_price: cartItem.sellPrice || cartItem.sell_price || cartItem.price || 0,
         price: cartItem.price || cartItem.sellPrice || cartItem.sell_price || 0,
-        category_id: cartItem.category_id || 'unknown',
-        category_name: cartItem.category_name || 'Uncategorized',
-        type: cartItem.type || 'main_item',
-        batch_id: cartItem.batch_id,
-        batchId: cartItem.batch_id,
-        batch_name: cartItem.batch_name,
-        batch_remaining: cartItem.batch_remaining || cartItem.real_available || 0,
-        sell_unit_id: cartItem.sell_unit_id,
-        conversion_factor: cartItem.conversion_factor || 1,
-        real_available: cartItem.real_available,
-        can_fulfill: cartItem.can_fulfill,
-        batch_switch_required: cartItem.batch_switch_required,
-        is_current_batch: cartItem.is_current_batch,
-        thumbnail: cartItem.thumbnail,
-        _batch_switched: cartItem._batch_switched || selectedBatchInfo.batch_switched,
-        search_score: cartItem.search_score || 0  // Preserve search score
+        
+        // ✅ CRITICAL: CATEGORY FIELDS
+        category_id: cartItem.category_id || item.category_id || 'unknown',
+        category_name: cartItem.category_name || item.category_name || 'Uncategorized',
+        
+        // Stock
+        stock: cartItem.stock || item.stock || cartItem.available_stock || item.available_stock || 0,
+        available_stock: cartItem.available_stock || item.available_stock || cartItem.stock || item.stock || 0,
+        
+        // ✅ CRITICAL: TYPE MUST BE PRESERVED
+        type: cartItem.type || item.type || 'main_item',
+        
+        // Batch Info
+        batch_id: cartItem.batch_id || cartItem.batchId || item.batch_id || item.batchId || null,
+        batchId: cartItem.batch_id || cartItem.batchId || item.batch_id || item.batchId || null,
+        batch_name: cartItem.batch_name || item.batch_name || null,
+        batch_remaining: cartItem.batch_remaining || item.batch_remaining || 0,
+        
+        // ✅ Selling Unit Info (only for selling units)
+        sell_unit_id: cartItem.sell_unit_id || item.sell_unit_id || null,
+        conversion_factor: cartItem.conversion_factor || item.conversion_factor || 1,
+        
+        // Batch Status (critical for emergency fix)
+        batch_status: cartItem.batch_status || item.batch_status || 'unknown',
+        
+        // Optional
+        thumbnail: cartItem.thumbnail || item.thumbnail || null,
+        
+        // Emergency fix metadata
+        _emergency_switch: cartItem._emergency_switch || false,
+        _proactive_switch: cartItem._proactive_switch || false,
+        _batch_switched: cartItem._batch_switched || false
     };
     
-    console.log('📦 Enriched cart item:', {
+    console.log('📦 Enriched item for cart:', {
         id: enrichedItem.id,
         type: enrichedItem.type,
+        name: enrichedItem.name,
+        price: enrichedItem.price,
+        safe_price: safeFloat(enrichedItem.price || 0),
         batch_id: enrichedItem.batch_id,
-        can_fulfill: enrichedItem.can_fulfill,
-        batch_switched: enrichedItem._batch_switched,
-        search_score: enrichedItem.search_score
+        batch_remaining: enrichedItem.batch_remaining,
+        safe_batch_remaining: safeFloat(enrichedItem.batch_remaining || 0),
+        batch_status: enrichedItem.batch_status,
+        action: action,
+        emergency_switch: enrichedItem._emergency_switch,
+        proactive_switch: enrichedItem._proactive_switch
     });
     
     // Show notification if needed
-    let finalMessage = message;
-    if (selectedBatchInfo.batch_switched) {
-        finalMessage = `Auto-switched to ${selectedBatchInfo.batch_name} batch`;
-    }
-    
-    if (finalMessage) {
+    if (message) {
         let notificationType = 'info';
-        if (action === 'switch_and_add' || selectedBatchInfo.batch_switched) notificationType = 'warning';
-        if (action === 'add_with_warning') notificationType = 'warning';
+        if (action === 'switch_and_add') {
+            notificationType = enrichedItem._emergency_switch ? 'error' : 'warning';
+        } else if (action === 'add_with_warning') {
+            notificationType = 'warning';
+        }
         
-        showNotification(finalMessage, notificationType);
+        showNotification(message, notificationType);
     }
     
-    // Add to cart via cart-icon.js
+    // Use cart-icon.js to add ONE item (one-tap = quantity 1)
     if (window.cartIcon && window.cartIcon.addItem) {
+        console.log('🛒 Adding to cart via cart-icon.js (one-tap)', {
+            name: enrichedItem.name,
+            type: enrichedItem.type,
+            unique_id: enrichedItem.id,
+            batch_id: enrichedItem.batch_id,
+            emergency_switch: enrichedItem._emergency_switch
+        });
+        
+        // Pass the enriched item with UNIQUE ID
         const success = window.cartIcon.addItem(enrichedItem);
         
         if (success) {
+            // Show success notification
             let successMsg = `Added 1 × ${item.name}`;
-            if (action === 'switch_and_add' || selectedBatchInfo.batch_switched) {
-                successMsg += ` (Auto-switched batch)`;
+            if (action === 'switch_and_add') {
+                if (enrichedItem._emergency_switch) {
+                    successMsg += ` (Emergency batch switch)`;
+                } else if (enrichedItem._proactive_switch) {
+                    successMsg += ` (Proactive batch switch)`;
+                } else {
+                    successMsg += ` (Auto-switched to new batch)`;
+                }
             }
             
             showNotification(successMsg, 'success', 2000);
             
-            // ====================================================
-            // FIX: DON'T CLEAR SEARCH RESULTS - JUST REFRESH THEM!
-            // ====================================================
-            console.log('🔄 Refreshing current search results (not clearing)');
-            
-            // Keep the search input focused
+            // Clear search for better UX
             const searchInput = document.getElementById('sales-search-input');
+            const searchClear = document.getElementById('search-clear');
             if (searchInput) { 
+                searchInput.value = ''; 
                 searchInput.focus(); 
             }
+            if (searchClear) searchClear.style.display = 'none';
+            clearSearchResults();
             
-            // Refresh the displayed results to show updated stock/cart status
-            if (currentSearchQuery && currentSearchResults.length > 0) {
-                console.log('♻️ Refreshing displayed results for:', currentSearchQuery);
-                renderEnhancedResults(currentSearchResults);
-            }
-            
-            console.log('✅ Item added to cart successfully (search preserved)');
+            console.log('✅ Item added to cart successfully', { 
+                type: enrichedItem.type,
+                action: action,
+                emergency_switch: enrichedItem._emergency_switch
+            });
         } else {
             console.log('❌ Failed to add to cart');
             showNotification('Failed to add to cart', 'error');
@@ -576,12 +649,12 @@ async function handleOneTap(item) {
         
         console.groupEnd();
         return success;
+    } else {
+        console.log('❌ Cart system not loaded');
+        showNotification('Cart system not ready. Please refresh.', 'error');
+        console.groupEnd();
+        return false;
     }
-    
-    console.log('❌ Cart system not loaded');
-    showNotification('Cart system not ready', 'error');
-    console.groupEnd();
-    return false;
 }
 
 // ====================================================
@@ -589,6 +662,7 @@ async function handleOneTap(item) {
 // ====================================================
 
 function showNotification(message, type = 'info', duration = 3000) {
+    // Remove existing notification
     const existing = document.getElementById('sales-notification');
     if (existing) existing.remove();
     
@@ -627,6 +701,13 @@ function showNotification(message, type = 'info', duration = 3000) {
     
     document.body.appendChild(notification);
     
+    // Auto remove after duration
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, duration);
+    
+    // Add CSS animations if not already present
     if (!document.getElementById('notification-styles')) {
         const style = document.createElement('style');
         style.id = 'notification-styles';
@@ -642,15 +723,10 @@ function showNotification(message, type = 'info', duration = 3000) {
         `;
         document.head.appendChild(style);
     }
-    
-    setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => notification.remove(), 300);
-    }, duration);
 }
 
 // ====================================================
-// SALES OVERLAY (UPDATED LEGEND)
+// SALES OVERLAY (ONE-TAP VERSION)
 // ====================================================
 
 function createSalesOverlay() {
@@ -677,8 +753,8 @@ function createSalesOverlay() {
         <div style="padding: 20px; background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,0.2); flex-shrink:0;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
                 <div>
-                    <h1 style="margin:0; color:white; font-size:26px; font-weight:700;">🛍️ Smart Sales</h1>
-                    <p style="margin:6px 0 0; color:rgba(255,255,255,0.8); font-size:14px;">Smart batch switching • Enhanced search</p>
+                    <h1 style="margin:0; color:white; font-size:26px; font-weight:700;">🛍️ One-Tap Sale</h1>
+                    <p style="margin:6px 0 0; color:rgba(255,255,255,0.8); font-size:14px;">Tap once = 1 item added to cart</p>
                 </div>
                 <button id="close-sales" style="background: rgba(255,255,255,0.2); border:none; color:white; width:44px; height:44px; border-radius:12px; font-size:22px; cursor:pointer; flex-shrink:0;">×</button>
             </div>
@@ -686,35 +762,31 @@ function createSalesOverlay() {
             <!-- Search Box -->
             <div style="position:relative;">
                 <div style="position:absolute; left:16px; top:50%; transform:translateY(-50%); color: rgba(255,255,255,0.7); font-size:18px; z-index:1;">🔍</div>
-                <input id="sales-search-input" placeholder="Search products..." style="width:100%; padding:16px 20px 16px 48px; border:none; border-radius:14px; font-size:16px; background: rgba(255,255,255,0.15); color:white; box-sizing:border-box;">
+                <input id="sales-search-input" placeholder="Search products (type 2+ letters)..." style="width:100%; padding:16px 20px 16px 48px; border:none; border-radius:14px; font-size:16px; background: rgba(255,255,255,0.15); color:white; box-sizing:border-box;">
                 <div id="search-clear" style="position:absolute; right:16px; top:50%; transform:translateY(-50%); color:rgba(255,255,255,0.7); font-size:20px; cursor:pointer; display:none; z-index:1;">×</div>
             </div>
             
-            <!-- Smart Legend -->
-            <div style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; justify-content:center;">
+            <!-- Batch Legend -->
+            <div style="display:flex; gap:12px; margin-top:16px; flex-wrap:wrap;">
                 <div style="display:flex; align-items:center; gap:4px;">
-                    <div style="width:10px; height:10px; background:#2ed573; border-radius:50%;"></div>
-                    <span style="color:rgba(255,255,255,0.8); font-size:10px;">Available</span>
+                    <div style="width:12px; height:12px; background:#2ed573; border-radius:50%;"></div>
+                    <span style="color:rgba(255,255,255,0.8); font-size:11px;">Good stock</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:4px;">
-                    <div style="width:10px; height:10px; background:#ff9f43; border-radius:50%;"></div>
-                    <span style="color:rgba(255,255,255,0.8); font-size:10px;">Low stock</span>
+                    <div style="width:12px; height:12px; background:#ff9f43; border-radius:50%;"></div>
+                    <span style="color:rgba(255,255,255,0.8); font-size:11px;">Last item</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:4px;">
-                    <div style="width:10px; height:10px; background:#ff6b6b; border-radius:50%;"></div>
-                    <span style="color:rgba(255,255,255,0.8); font-size:10px;">Out of stock</span>
+                    <div style="width:12px; height:12px; background:#ff6b6b; border-radius:50%;"></div>
+                    <span style="color:rgba(255,255,255,0.8); font-size:11px;">Out of stock</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:4px;">
-                    <div style="width:10px; height:10px; background:#9b59b6; border-radius:50%;"></div>
-                    <span style="color:rgba(255,255,255,0.8); font-size:10px;">Auto-switch</span>
+                    <div style="width:12px; height:12px; background:#9b59b6; border-radius:50%;"></div>
+                    <span style="color:rgba(255,255,255,0.8); font-size:11px;">Auto-switch ready</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:4px;">
-                    <div style="width:10px; height:10px; background:#3498db; border-radius:50%;"></div>
-                    <span style="color:rgba(255,255,255,0.8); font-size:10px;">In your cart</span>
-                </div>
-                <div style="display:flex; align-items:center; gap:4px;">
-                    <div style="width:10px; height:10px; background:#ff9f43; border-radius:50%;"></div>
-                    <span style="color:rgba(255,255,255,0.8); font-size:10px;">Partial stock</span>
+                    <div style="width:12px; height:12px; background:#e74c3c; border-radius:50%;"></div>
+                    <span style="color:rgba(255,255,255,0.8); font-size:11px;">Emergency switch</span>
                 </div>
             </div>
         </div>
@@ -723,14 +795,14 @@ function createSalesOverlay() {
         <div id="sales-results" style="flex:1; overflow-y:auto; padding:16px; -webkit-overflow-scrolling:touch;">
             <div style="text-align:center; color: rgba(255,255,255,0.6); padding:40px 20px;">
                 <div style="font-size:56px; margin-bottom:16px; opacity:0.5;">🔍</div>
-                <h3 style="margin:0 0 8px; color: rgba(255,255,255,0.9); font-size:18px;">Enhanced Search</h3>
-                <p style="margin:0; font-size:14px;">Type to search with smart scoring</p>
+                <h3 style="margin:0 0 8px; color: rgba(255,255,255,0.9); font-size:18px;">Search Products</h3>
+                <p style="margin:0; font-size:14px;">Type 2+ letters to search</p>
             </div>
         </div>
         
         <!-- Info Footer -->
         <div style="padding:12px 20px; background:rgba(0,0,0,0.2); color:rgba(255,255,255,0.7); font-size:12px; text-align:center;">
-            👆 One tap • Smart batch switching • Enhanced search relevance
+            👆 One tap = 1 item • System auto-switches batches when empty • Emergency fix active
         </div>
     `;
 
@@ -764,7 +836,7 @@ function createSalesOverlay() {
 }
 
 // ====================================================
-// SEARCH FUNCTIONS (UPDATED WITH CART ID)
+// SEARCH FUNCTIONS
 // ====================================================
 
 function clearSearchResults() {
@@ -773,13 +845,10 @@ function clearSearchResults() {
     results.innerHTML = `
         <div style="text-align:center; color: rgba(255,255,255,0.6); padding:40px 20px;">
             <div style="font-size:56px; margin-bottom:16px; opacity:0.5;">🔍</div>
-            <h3 style="margin:0 0 8px; color: rgba(255,255,255,0.9); font-size:18px;">Enhanced Search</h3>
-            <p style="margin:0; font-size:14px;">Type to search with smart scoring</p>
+            <h3 style="margin:0 0 8px; color: rgba(255,255,255,0.9); font-size:18px;">Search Products</h3>
+            <p style="margin:0; font-size:14px;">Type 2+ letters to search</p>
         </div>
     `;
-    // Also clear stored results
-    currentSearchResults = [];
-    currentSearchQuery = "";
 }
 
 async function onSearchInput(query) {
@@ -792,21 +861,18 @@ async function onSearchInput(query) {
     }
 
     if (query.length < 2) {
-        results.innerHTML = `<p style="text-align:center;color:white;padding:40px;">Type at least 2 letters...</p>`;
+        results.innerHTML = `<p style="text-align:center;color:white;padding:40px;">Type at least 2 letters to search...</p>`;
         return;
     }
 
     searchTimeout = setTimeout(async () => {
-        console.log(`🔍 ENHANCED SEARCH: "${query}"`);
-        
-        // Store the current search query
-        currentSearchQuery = query;
+        console.log(`🔍 SEARCH: "${query}"`);
         
         results.innerHTML = `
             <div style="text-align:center; padding:40px 20px;">
-                <div style="font-size:36px; margin-bottom:16px; color:rgba(255,255,255,0.7);">⚡</div>
-                <h3 style="margin:0 0 8px; color: white; font-size:16px;">Enhanced search for "${query}"</h3>
-                <p style="margin:0; color:rgba(255,255,255,0.7); font-size:14px;">Finding best matches...</p>
+                <div style="font-size:36px; margin-bottom:16px; color:rgba(255,255,255,0.7);">⏳</div>
+                <h3 style="margin:0 0 8px; color: white; font-size:16px;">Searching for "${query}"</h3>
+                <p style="margin:0; color:rgba(255,255,255,0.7); font-size:14px;">Checking inventory...</p>
             </div>
         `;
         
@@ -819,7 +885,6 @@ async function onSearchInput(query) {
                 body: JSON.stringify({ 
                     query, 
                     shop_id: currentShopId,
-                    cart_id: getCurrentCartId(),
                     user_id: currentUser?.uid 
                 })
             });
@@ -827,24 +892,9 @@ async function onSearchInput(query) {
             const data = await res.json();
             const searchTime = Date.now() - startTime;
             
-            console.log(`✅ Enhanced search completed in ${searchTime}ms`, {
-                results: data.items?.length || 0,
-                scored_results: data.meta?.scored_results || 0,
-                high_score_results: data.meta?.high_score_results || 0,
-                main_items_count: data.meta?.main_items_count || 0,
-                selling_units_count: data.meta?.selling_units_count || 0
+            console.log(`✅ Search completed in ${searchTime}ms`, {
+                results: data.items?.length || 0
             });
-            
-            // Log search scores for debugging
-            if (data.items && data.items.length > 0) {
-                console.log('🔍 Search scores:', data.items.map(item => ({
-                    name: item.name,
-                    type: item.type,
-                    score: item.search_score || 0,
-                    can_fulfill: item.can_fulfill,
-                    real_available_fraction: item.real_available_fraction || 0
-                })));
-            }
             
             if (!data.items?.length) {
                 results.innerHTML = `
@@ -854,14 +904,10 @@ async function onSearchInput(query) {
                         <p style="margin:0; color:rgba(255,255,255,0.7); font-size:14px;">Try a different search term</p>
                     </div>
                 `;
-                // Clear stored results
-                currentSearchResults = [];
                 return;
             }
             
-            // Store the results for later refresh
-            currentSearchResults = data.items;
-            renderEnhancedResults(data.items);
+            renderResults(data.items);
             
         } catch (error) {
             console.log('❌ Search failed', error);
@@ -870,81 +916,38 @@ async function onSearchInput(query) {
                 <div style="text-align:center; padding:40px 20px;">
                     <div style="font-size:36px; margin-bottom:16px; color:#ff6b6b;">❌</div>
                     <h3 style="margin:0 0 8px; color: white; font-size:16px;">Search failed</h3>
-                    <p style="margin:0; color:rgba(255,255,255,0.7); font-size:14px;">${error.message}</p>
+                    <p style="margin:0; color:rgba(255,255,255,0.7); font-size:14px;">Please try again</p>
                 </div>
             `;
-            // Clear stored results on error
-            currentSearchResults = [];
         }
     }, 150);
 }
 
 // ====================================================
-// ENHANCED RESULTS RENDERING WITH SEARCH SCORES
+// RENDER RESULTS WITH ONE-TAP FUNCTIONALITY
 // ====================================================
 
-function renderEnhancedResults(items) {
+function renderResults(items) {
     const resultsContainer = document.getElementById("sales-results");
     resultsContainer.innerHTML = '';
     
-    console.log(`📋 Rendering ${items.length} enhanced results`);
+    console.log(`📋 Rendering ${items.length} results`);
     
-    // NEW: Better grouping logic that handles partial stock
-    const bestMatches = [];
-    const goodMatches = [];
-    const lowStockMatches = [];
-    const partialStockMatches = [];
-    const unavailableMatches = [];
+    // Filter items based on canAddToCart
+    const availableItems = items.filter(item => canAddToCart(item));
+    const outOfStockItems = items.filter(item => !canAddToCart(item));
     
-    items.forEach(item => {
-        const score = item.search_score || 0;
-        const canFulfill = item.can_fulfill !== false;
-        
-        // Check if it's a selling unit with partial stock
-        const isSellingUnit = item.type === 'selling_unit';
-        const hasPartialStock = item.real_available_fraction > 0;
-        const needsBatchSwitch = item.batch_switch_required;
-        const hasNextBatch = item.next_batch_available;
-        
-        // Grouping logic:
-        // 1. High score + can fulfill = Best Matches
-        // 2. High score + auto-switch available = Good Matches
-        // 3. High score + partial stock = Partial Stock
-        // 4. Medium score + can fulfill = Good Matches
-        // 5. Low score or no stock = Unavailable
-        
-        if (score >= 80 && canFulfill) {
-            bestMatches.push(item);
-        } 
-        else if (score >= 80 && !canFulfill && needsBatchSwitch && hasNextBatch) {
-            // High score items that can auto-switch
-            goodMatches.push(item);
-        }
-        else if (score >= 80 && !canFulfill && isSellingUnit && hasPartialStock) {
-            // Selling units with partial stock (like "Ram stick 2gb")
-            partialStockMatches.push(item);
-        }
-        else if (score >= 50 && canFulfill) {
-            goodMatches.push(item);
-        }
-        else if (score >= 30 && !canFulfill && isSellingUnit && hasPartialStock) {
-            // Selling units with partial stock but lower score
-            partialStockMatches.push(item);
-        }
-        else if (score >= 30 && !canFulfill && item.batch_remaining > 0) {
-            // Items with some stock but not enough to fulfill
-            lowStockMatches.push(item);
-        }
-        else if (score > 0) {
-            unavailableMatches.push(item);
-        }
+    console.log('📊 Item availability:', {
+        total: items.length,
+        available: availableItems.length,
+        outOfStock: outOfStockItems.length
     });
     
-    // Helper function to render group header
-    function renderGroupHeader(title, count, color = 'rgba(255,255,255,0.9)') {
-        const header = document.createElement('div');
-        header.style.cssText = `
-            color: ${color};
+    // Render available items first
+    if (availableItems.length > 0) {
+        const groupHeader = document.createElement('div');
+        groupHeader.style.cssText = `
+            color: rgba(255,255,255,0.9);
             font-size: 14px;
             font-weight: 600;
             margin: 20px 0 12px 0;
@@ -953,45 +956,32 @@ function renderEnhancedResults(items) {
             align-items: center;
             gap: 8px;
         `;
-        header.innerHTML = `${title} (${count})`;
-        return header;
+        groupHeader.innerHTML = `✅ Available Items (${availableItems.length})`;
+        resultsContainer.appendChild(groupHeader);
+        
+        availableItems.forEach(item => renderItemCard(item, resultsContainer));
     }
     
-    console.log('📊 Enhanced search grouping:', {
-        bestMatches: bestMatches.length,
-        goodMatches: goodMatches.length,
-        partialStockMatches: partialStockMatches.length,
-        lowStockMatches: lowStockMatches.length,
-        unavailableMatches: unavailableMatches.length
-    });
-    
-    // Render groups in order of importance
-    if (bestMatches.length > 0) {
-        resultsContainer.appendChild(renderGroupHeader('🎯 Best Matches', bestMatches.length, '#2ed573'));
-        bestMatches.forEach(item => renderEnhancedItemCard(item, resultsContainer, 'high'));
+    // Render out of stock items
+    if (outOfStockItems.length > 0) {
+        const groupHeader = document.createElement('div');
+        groupHeader.style.cssText = `
+            color: rgba(255,255,255,0.7);
+            font-size: 14px;
+            font-weight: 600;
+            margin: 20px 0 12px 0;
+            padding-left: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        `;
+        groupHeader.innerHTML = `❌ Out of Stock (${outOfStockItems.length})`;
+        resultsContainer.appendChild(groupHeader);
+        
+        outOfStockItems.forEach(item => renderItemCard(item, resultsContainer));
     }
     
-    if (goodMatches.length > 0) {
-        resultsContainer.appendChild(renderGroupHeader('✅ Good Matches', goodMatches.length, '#ffa502'));
-        goodMatches.forEach(item => renderEnhancedItemCard(item, resultsContainer, 'medium'));
-    }
-    
-    if (partialStockMatches.length > 0) {
-        resultsContainer.appendChild(renderGroupHeader('⚠️ Partial Stock', partialStockMatches.length, '#ff9f43'));
-        partialStockMatches.forEach(item => renderEnhancedItemCard(item, resultsContainer, 'partial'));
-    }
-    
-    if (lowStockMatches.length > 0) {
-        resultsContainer.appendChild(renderGroupHeader('📉 Low Stock', lowStockMatches.length, '#ff6b6b'));
-        lowStockMatches.forEach(item => renderEnhancedItemCard(item, resultsContainer, 'low'));
-    }
-    
-    if (unavailableMatches.length > 0) {
-        resultsContainer.appendChild(renderGroupHeader('❌ Currently Unavailable', unavailableMatches.length, 'rgba(255,255,255,0.7)'));
-        unavailableMatches.forEach(item => renderEnhancedItemCard(item, resultsContainer, 'unavailable'));
-    }
-    
-    // Empty state
+    // If no items at all
     if (items.length === 0) {
         resultsContainer.innerHTML = `
             <div style="text-align:center; color: rgba(255,255,255,0.6); padding:40px 20px;">
@@ -1001,65 +991,55 @@ function renderEnhancedResults(items) {
             </div>
         `;
     }
+    
+    console.log(`✅ Rendered ${items.length} items`);
 }
 
-function renderEnhancedItemCard(item, resultsContainer, matchQuality = 'medium') {
-    const canAdd = canAddToCart(item);
+function renderItemCard(item, resultsContainer) {
+    const stock = getItemStock(item);
     const stockColor = getStockColor(item);
     const stockText = getStockText(item);
+    const canAdd = canAddToCart(item);
     const price = getItemPrice(item);
-    const searchScore = item.search_score || 0;
     
-    // Determine batch indicator
+    // Determine batch indicator based on actual stock
     let batchIndicator = '';
-    if (item.is_current_batch) {
-        batchIndicator = '🛒 IN CART';
-    } else if (item.can_fulfill === false && item.batch_switch_required) {
-        batchIndicator = '🔄 AUTO-SWITCH';
-    } else if (item.can_fulfill === true) {
-        const stock = item.real_available !== undefined ? item.real_available : item.batch_remaining;
-        if (stock < 2) {
-            batchIndicator = '⚠️ LOW';
+    
+    if (item.type === 'selling_unit') {
+        if (stock > 0.000001) {
+            batchIndicator = '📦 SELLING UNIT';
         } else {
-            batchIndicator = '✅ AVAILABLE';
+            batchIndicator = '❌ OUT';
         }
-    } else if (item.type === 'selling_unit' && item.real_available_fraction > 0) {
-        batchIndicator = '⚠️ PARTIAL';
     } else {
-        batchIndicator = '❌ UNAVAILABLE';
+        // Base unit indicators
+        if (canAdd) {
+            if (stock >= 0.999999) {
+                if (stock < 1.999999) {
+                    batchIndicator = '🚨 LAST';
+                } else if (stock < 10) {
+                    batchIndicator = '⚠️ LOW';
+                } else {
+                    batchIndicator = '✅ IN STOCK';
+                }
+            } else if (stock < 0.999999 && item.next_batch_available && safeFloat(item.next_batch_remaining || 0) >= 0.999999) {
+                batchIndicator = '🔄 AUTO-SWITCH';
+            }
+        } else {
+            batchIndicator = '❌ OUT';
+        }
     }
     
-    // Determine match quality indicator
-    let matchIndicator = '';
-    let matchColor = '#666';
-    if (matchQuality === 'high') {
-        matchIndicator = '🎯';
-        matchColor = '#2ed573';
-    } else if (matchQuality === 'medium') {
-        matchIndicator = '✅';
-        matchColor = '#ffa502';
-    } else if (matchQuality === 'partial') {
-        matchIndicator = '⚠️';
-        matchColor = '#ff9f43';
-    } else if (matchQuality === 'low') {
-        matchIndicator = '📉';
-        matchColor = '#ff6b6b';
-    } else if (matchQuality === 'unavailable') {
-        matchIndicator = '❌';
-        matchColor = 'rgba(255,255,255,0.5)';
-    }
-    
-    // Prepare display name
-    let displayName = item.name;
-    if (item.type === 'selling_unit' && item.display_name) {
-        displayName = item.display_name;
+    // Emergency switch indicator
+    if (item.batch_status === 'exhausted' && item.next_batch_available && safeFloat(item.next_batch_remaining || 0) >= 0.999999) {
+        batchIndicator = '🚨 EMERGENCY SWITCH';
+        stockColor = '#e74c3c';
     }
     
     const card = document.createElement('div');
     card.dataset.itemId = item.item_id;
     card.dataset.batchId = item.batch_id;
     card.dataset.canAdd = canAdd;
-    card.dataset.searchScore = searchScore;
     
     card.style.cssText = `
         background: rgba(255,255,255,0.1);
@@ -1072,7 +1052,6 @@ function renderEnhancedItemCard(item, resultsContainer, matchQuality = 'medium')
         position: relative;
         transition: transform 0.2s, box-shadow 0.2s;
         opacity: ${canAdd ? '1' : '0.7'};
-        border-left: 4px solid ${matchColor};
     `;
     
     if (canAdd) {
@@ -1085,27 +1064,11 @@ function renderEnhancedItemCard(item, resultsContainer, matchQuality = 'medium')
             card.style.boxShadow = 'none';
         };
     }
-    
-    // Render notifications
-    const notificationsHTML = item.notifications ? item.notifications.map(notif => `
-        <div style="
-            font-size: 11px;
-            color: ${notif.severity === 'error' ? '#e74c3c' : 
-                    notif.severity === 'warning' ? '#ff9f43' : '#3498db'};
-            margin-top: 4px;
-            background: ${notif.severity === 'error' ? 'rgba(231,76,60,0.1)' :
-                        notif.severity === 'warning' ? 'rgba(255,159,67,0.1)' : 'rgba(52,152,219,0.1)'};
-            padding: 4px 8px;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        ">
-            ${notif.severity === 'error' ? '🚨' :
-              notif.severity === 'warning' ? '⚠️' : 'ℹ️'}
-            ${notif.message}
-        </div>
-    `).join('') : '';
+
+    let displayName = item.name;
+    if (item.type === 'selling_unit' && item.display_name) {
+        displayName = `${item.name.split('(')[0].trim()} (${item.display_name})`;
+    }
 
     card.innerHTML = `
         ${batchIndicator ? `
@@ -1114,33 +1077,15 @@ function renderEnhancedItemCard(item, resultsContainer, matchQuality = 'medium')
             </div>
         ` : ''}
         
-        <!-- Match quality indicator -->
-        <div style="position:absolute; top:10px; left:10px; background:${matchColor}; color:white; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px;">
-            ${matchIndicator}
-        </div>
-        
-        <div style="display:flex; align-items:center; gap:16px; margin-left:8px;">
-            <div class="item-thumbnail" style="width:70px;height:70px;background:rgba(255,255,255,0.1);border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0; margin-left:20px;">
+        <div style="display:flex; align-items:center; gap:16px;">
+            <div class="item-thumbnail" style="width:70px;height:70px;background:rgba(255,255,255,0.1);border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
                 ${item.thumbnail ? 
                     `<img src="${item.thumbnail}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.parentElement.innerHTML='<span style=\\'font-size:26px;color:rgba(255,255,255,0.5)\\'>📦</span>';">` : 
                     `<span style="font-size:26px;color:rgba(255,255,255,0.5)">📦</span>`
                 }
             </div>
             <div style="flex:1; min-width:0;">
-                <div class="item-name" style="font-weight:600;color:${canAdd ? 'white' : 'rgba(255,255,255,0.6)'};font-size:16px;margin-bottom:6px;line-height:1.4;word-break:break-word;">
-                    ${displayName}
-                    ${item.is_current_batch ? '<span style="background:#3498db;color:white;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:8px;">IN CART</span>' : ''}
-                    ${item.type === 'selling_unit' && item.parent_item_name ? 
-                        `<span style="font-size:12px; color:rgba(255,255,255,0.7); margin-left:8px;">(${item.parent_item_name})</span>` : 
-                        ''
-                    }
-                </div>
-                
-                <!-- Search score indicator (debug mode) -->
-                <div style="font-size:10px; color:${matchColor}; margin-bottom:4px; display:flex; align-items:center; gap:4px;">
-                    <span>Match: ${searchScore}/100</span>
-                    ${item.matched_by ? `<span style="background:${matchColor}20; padding:1px 4px; border-radius:3px;">${item.matched_by}</span>` : ''}
-                </div>
+                <div class="item-name" style="font-weight:600;color:${canAdd ? 'white' : 'rgba(255,255,255,0.6)'};font-size:16px;margin-bottom:6px;line-height:1.4;word-break:break-word;">${displayName}</div>
                 
                 <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap;">
                     <div class="item-price" style="color:${canAdd ? '#ffd700' : 'rgba(255,215,0,0.6)'};font-weight:700;font-size:20px;flex-shrink:0;">
@@ -1158,7 +1103,7 @@ function renderEnhancedItemCard(item, resultsContainer, matchQuality = 'medium')
                     ` : ''}
                 </div>
                 
-                <div style="color:${stockColor}; font-size:13px; font-weight:500; display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                <div style="color:${stockColor}; font-size:13px; font-weight:500; display:flex; align-items:center; gap:6px;">
                     <div style="width:8px;height:8px;border-radius:50%;background:${stockColor};"></div>
                     ${stockText}
                 </div>
@@ -1169,32 +1114,49 @@ function renderEnhancedItemCard(item, resultsContainer, matchQuality = 'medium')
                     </div>` : ''
                 }
                 
-                ${item.next_batch_available && item.can_fulfill === false ? 
+                ${item.next_batch_available ? 
                     `<div style="font-size:11px; color:rgba(255,255,255,0.7); margin-top:4px;">
-                        Next: ${item.next_batch_name || 'batch'} (${item.next_batch_remaining || 0} @ $${item.next_batch_price?.toFixed(2) || price.toFixed(2)})
+                        Next batch: ${item.next_batch_name || 'Available'} (${item.next_batch_remaining || 0} units @ $${item.next_batch_price?.toFixed(2) || '???'})
                     </div>` : ''
                 }
                 
-                ${notificationsHTML}
+                ${item.batch_status === 'exhausted' ? 
+                    `<div style="font-size:11px; color:#e74c3c; margin-top:4px; background:rgba(231,76,60,0.1); padding:4px 8px; border-radius:4px;">
+                        🚨 Backend reports batch exhausted (will auto-switch)
+                    </div>` : ''
+                }
+                
+                ${!canAdd && item.type !== 'selling_unit' && stock > 0 && stock < 0.999999 ? 
+                    `<div style="font-size:11px; color:#ff6b6b; margin-top:4px; background:rgba(255,107,107,0.1); padding:4px 8px; border-radius:4px;">
+                        ⚠️ Current batch: ${stock.toFixed(6)} units (needs ≥ 1)
+                    </div>` : ''
+                }
             </div>
         </div>
     `;
 
     if (canAdd) {
         card.onclick = () => {
-            console.log('Item selected for one-tap:', {
+            console.log('Item selected:', {
                 name: item.name,
                 type: item.type,
                 batch_id: item.batch_id,
-                can_fulfill: item.can_fulfill,
-                search_score: searchScore
+                batch_remaining: item.batch_remaining,
+                safe_batch_remaining: safeFloat(item.batch_remaining || 0),
+                next_batch_available: item.next_batch_available,
+                batch_status: item.batch_status
             });
             handleOneTap(item);
         };
         
+        // Add click effect
         card.style.cursor = 'pointer';
-        card.onmousedown = () => card.style.transform = 'scale(0.98)';
-        card.onmouseup = () => card.style.transform = 'scale(1)';
+        card.onmousedown = () => {
+            card.style.transform = 'scale(0.98)';
+        };
+        card.onmouseup = () => {
+            card.style.transform = 'scale(1)';
+        };
     }
     
     resultsContainer.appendChild(card);
@@ -1213,14 +1175,14 @@ async function openSalesOverlay() {
         return; 
     }
     
-    console.log('🚀 Opening Enhanced Sales Overlay');
+    console.log('🚀 Opening Sales Overlay');
     
     let shopId = currentUser.uid;
     try {
         const snap = await getDoc(doc(db, "Users", shopId));
         if (snap.exists() && snap.data().shop_id) {
             shopId = snap.data().shop_id;
-            console.log('Shop ID resolved', { resolved: shopId });
+            console.log('Shop ID resolved', { original: currentUser.uid, resolved: shopId });
         }
     } catch (error) {
         console.log('Error resolving shop ID', error);
@@ -1232,13 +1194,13 @@ async function openSalesOverlay() {
     createSalesOverlay();
     salesOverlay.style.display = 'flex';
     
-    // Clear any previous search when opening
-    currentSearchResults = [];
-    currentSearchQuery = "";
+    console.log('Sales overlay displayed');
     
     setTimeout(() => {
         const input = document.getElementById("sales-search-input");
-        if (input) input.focus();
+        if (input) {
+            input.focus();
+        }
     }, 50);
 }
 
@@ -1246,9 +1208,6 @@ function closeSalesOverlay() {
     if (salesOverlay) {
         console.log('🔒 Closing Sales Overlay');
         salesOverlay.style.display = 'none';
-        // Clear search state when closing
-        currentSearchResults = [];
-        currentSearchQuery = "";
     }
 }
 
@@ -1257,17 +1216,19 @@ function closeSalesOverlay() {
 // ====================================================
 
 document.addEventListener("DOMContentLoaded", () => {
-    console.log('⚡ Enhanced Sales System Initialization');
+    console.log('⚡ Sales System Initialization');
     
-    // Ensure cart ID exists
-    getCurrentCartId();
-    
-    // Check cart system
+    // Check if cart-icon.js is loaded
     if (!window.cartIcon) {
-        console.log('⚠️ cart-icon.js not loaded yet');
+        console.log('⚠️ cart-icon.js not loaded yet. Waiting...');
+        
+        // Try to check again after a delay
         setTimeout(() => {
             if (window.cartIcon) {
                 console.log('✅ cart-icon.js now loaded');
+            } else {
+                console.log('❌ cart-icon.js still not loaded');
+                console.error('cart-icon.js is required for sales functionality');
             }
         }, 1000);
     } else {
@@ -1278,38 +1239,43 @@ document.addEventListener("DOMContentLoaded", () => {
     window.openSalesOverlay = openSalesOverlay;
     window.closeSalesOverlay = closeSalesOverlay;
     window.batchIntelligence = batchIntelligence;
-    window.findBestBatchForSellingUnit = findBestBatchForSellingUnit; // Expose for debugging
     
     // Initialize sell button
     const sellBtn = document.getElementById("sell-btn");
     if (sellBtn) {
         sellBtn.addEventListener("click", e => { 
             e.preventDefault(); 
+            console.log('Sell button clicked');
             openSalesOverlay(); 
         });
         console.log('✅ Sell button initialized');
+    } else {
+        console.log('⚠️ Sell button not found in DOM');
     }
     
-    // Keyboard shortcut
+    // Add keyboard shortcut (Alt+S for sales)
     document.addEventListener('keydown', (e) => {
         if (e.altKey && e.key === 's') {
             e.preventDefault();
+            console.log('Keyboard shortcut activated: Alt+S');
             openSalesOverlay();
         }
     });
     
+    console.log('✅ Sales system ready');
+    console.log('🚨 EMERGENCY FIX ACTIVE: Handling frontend/backend stock mismatch');
+    
     console.log(`
 ╔═══════════════════════════════════════════╗
-║     🎯 ENHANCED SALES SYSTEM READY       ║
+║     🛍️ ONE-TAP SALES SYSTEM READY        ║
 ╠═══════════════════════════════════════════╣
-║ • Enhanced search scoring                ║
-║ • Smart batch switching                  ║
-║ • Cart-aware search                      ║
-║ • Match quality indicators               ║
-║ • Partial stock handling                 ║
-║ • PERSISTENT SEARCH RESULTS              ║
-║ • SELLING UNIT BATCH SWITCHING FIX       ║
-║ • Press Alt+S to open                    ║
+║ • One tap = 1 item to cart               ║
+║ • Auto batch switching                   ║
+║ • No quantity prompts                    ║
+║ • Integrated with cart-icon.js           ║
+║ • Press Alt+S to open sales              ║
+║ • 🚨 EMERGENCY FIX: Frontend/Backend     ║
+║   data mismatch handling                 ║
 ╚═══════════════════════════════════════════╝
 `);
 });
@@ -1322,7 +1288,5 @@ export {
     openSalesOverlay,
     closeSalesOverlay,
     batchIntelligence,
-    handleOneTap,
-    getCurrentCartId,
-    findBestBatchForSellingUnit
+    handleOneTap
 };

@@ -5,14 +5,15 @@ import { getFirestore } from "https://www.gstatic.com/firebasejs/9.23.0/firebase
 
 // Your Firebase config
 const firebaseConfig = {
-  apiKey: "AIzaSyBs2E6onYHaoyH7Lek8uY8dEg20XYwZN3g",
-  authDomain: "superkeeper-2b7f6.firebaseapp.com",
-  projectId: "superkeeper-2b7f6",
-  storageBucket: "superkeeper-2b7f6.firebasestorage.app",
-  messagingSenderId: "921700961073",
-  appId: "1:921700961073:web:5c64083b845bd0e752fe10",
-  measurementId: "G-971GJRVCE5"
+  apiKey: "AIzaSyBO0xOY_O6uadK5pDhqlYHPcE2C-6cFlNo",
+  authDomain: "superkeeper-ec181.firebaseapp.com",
+  projectId: "superkeeper-ec181",
+  storageBucket: "superkeeper-ec181.firebasestorage.app",
+  messagingSenderId: "1070569435595",
+  appId: "1:1070569435595:web:b63e591a8551ec802b064e",
+  measurementId: "G-T4X41WYK95"
 };
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
