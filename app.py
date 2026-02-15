@@ -22,6 +22,24 @@ from datetime import datetime, timedelta
 import uuid
 import json
 import os
+
+# ======================================================
+# SSL/TLS OPTIMIZATIONS FOR RENDER
+# ======================================================
+import ssl
+import socket
+
+# Patch SSL to be more resilient
+ssl._create_default_https_context = ssl._create_unverified_context
+
+# Increase socket timeout for mobile networks
+socket.setdefaulttimeout(30)
+
+# Force HTTP/1.1 for better compatibility
+app.config['PREFERRED_URL_SCHEME'] = 'https'
+
+
+
 # ======================================================
 # APP INIT
 # ======================================================
@@ -1681,5 +1699,6 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
 
     app.run(host="0.0.0.0", port=port, debug=True)
+
 
 
