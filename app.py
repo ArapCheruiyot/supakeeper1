@@ -1640,16 +1640,19 @@ def test_selling_units():
 # ======================================================
 # RUN SERVER
 # ======================================================
+# ======================================================
+# RUN SERVER
+# ======================================================
+# THIS RUNS FOR BOTH DEVELOPMENT AND PRODUCTION (Gunicorn)
+print("[INIT] Preloading FULL cache (with batch tracking)...")
+refresh_full_item_cache()
+
+# Set up listeners for both main items AND selling units
+print("[INIT] Setting up Firestore listeners...")
+db.collection_group("items").on_snapshot(on_full_item_snapshot)
+db.collection_group("sellUnits").on_snapshot(on_selling_units_snapshot)
+print("[READY] Listeners active for items and selling units")
+
+# This block ONLY runs for local development with "python app.py"
 if __name__ == "__main__":
-    print("[INIT] Preloading FULL cache (with batch tracking)...")
-    refresh_full_item_cache()
-    
-    # Set up listeners for both main items AND selling units
-    print("[INIT] Setting up Firestore listeners...")
-    db.collection_group("items").on_snapshot(on_full_item_snapshot)
-    db.collection_group("sellUnits").on_snapshot(on_selling_units_snapshot)
-    print("[READY] Listeners active for items and selling units")
-    
-
     app.run(debug=True)
-
