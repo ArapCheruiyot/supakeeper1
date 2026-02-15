@@ -30,8 +30,15 @@ app = Flask(__name__)
 # ======================================================
 # FIREBASE CONFIG
 # ======================================================
-cred = credentials.Certificate("serviceAccountKey.json")
-firebase_admin.initialize_app(cred)
+if not firebase_admin._apps:
+    firebase_key = os.environ.get("FIREBASE_KEY")
+    
+    if not firebase_key:
+        raise RuntimeError("FIREBASE_KEY environment variable not set")
+    
+    cred = credentials.Certificate(json.loads(firebase_key))
+    firebase_admin.initialize_app(cred)
+
 db = firestore.client()
 
 # ======================================================
@@ -1654,4 +1661,5 @@ except Exception as e:
 if __name__ == "__main__":
     # For local development only - use Flask dev server
     port = int(os.environ.get("PORT", 5000))
+
     app.run(host="0.0.0.0", port=port, debug=True)
