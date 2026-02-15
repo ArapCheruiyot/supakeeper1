@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify
-import os  #
+
 import requests
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -21,7 +21,7 @@ import random
 from datetime import datetime, timedelta
 import uuid
 import json
-
+import os
 # ======================================================
 # APP INIT
 # ======================================================
@@ -30,15 +30,8 @@ app = Flask(__name__)
 # ======================================================
 # FIREBASE CONFIG
 # ======================================================
-if not firebase_admin._apps:
-    firebase_key = os.environ.get("FIREBASE_KEY")
-    
-    if not firebase_key:
-        raise RuntimeError("FIREBASE_KEY environment variable not set")
-    
-    cred = credentials.Certificate(json.loads(firebase_key))
-    firebase_admin.initialize_app(cred)
-
+cred = credentials.Certificate("serviceAccountKey.json")
+firebase_admin.initialize_app(cred)
 db = firestore.client()
 
 # ======================================================
@@ -1636,23 +1629,29 @@ def test_selling_units():
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-# ======================================================
-# RUN SERVER
-# ======================================================
 # ======================================================
 # RUN SERVER
 # ======================================================
 # THIS RUNS FOR BOTH DEVELOPMENT AND PRODUCTION (Gunicorn)
 print("[INIT] Preloading FULL cache (with batch tracking)...")
-refresh_full_item_cache()
+try:
+    refresh_full_item_cache()
+    print("✅ Cache initialized successfully")
+except Exception as e:
+    print(f"⚠️ Cache initialization error: {e}")
+    print("⚠️ Continuing anyway - cache will populate on first request")
 
 # Set up listeners for both main items AND selling units
 print("[INIT] Setting up Firestore listeners...")
-db.collection_group("items").on_snapshot(on_full_item_snapshot)
-db.collection_group("sellUnits").on_snapshot(on_selling_units_snapshot)
-print("[READY] Listeners active for items and selling units")
+try:
+    db.collection_group("items").on_snapshot(on_full_item_snapshot)
+    db.collection_group("sellUnits").on_snapshot(on_selling_units_snapshot)
+    print("[READY] Listeners active for items and selling units")
+except Exception as e:
+    print(f"⚠️ Listener setup error: {e}")
 
-# This block ONLY runs for local development with "python app.py"
+# This block ONLY runs for local development
 if __name__ == "__main__":
-    app.run(debug=True)
+    # For local development only - use Flask dev server
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
