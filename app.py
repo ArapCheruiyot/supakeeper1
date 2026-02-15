@@ -1,19 +1,9 @@
 from flask import Flask, render_template, request, jsonify
-
+import os
 import requests
 import firebase_admin
 from firebase_admin import credentials, firestore
-
 import numpy as np
-# ======================================================
-# EMBEDDING DEPENDENCIES - DISABLED
-# ======================================================
-# from PIL import Image
-# from io import BytesIO
-# import tensorflow_hub as hub
-# from embeddings import generate_embedding
-# from sklearn.metrics.pairwise import cosine_similarity
-
 import time
 import base64
 import math
@@ -21,14 +11,17 @@ import random
 from datetime import datetime, timedelta
 import uuid
 import json
-import os
+import ssl  # Add this
+import socket  # Add this
 
 # ======================================================
-# SSL/TLS OPTIMIZATIONS FOR RENDER
+# APP INIT - THIS MUST COME FIRST!
 # ======================================================
-import ssl
-import socket
+app = Flask(__name__)
 
+# ======================================================
+# SSL/TLS OPTIMIZATIONS - NOW AFTER app IS DEFINED
+# ======================================================
 # Patch SSL to be more resilient
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -38,12 +31,9 @@ socket.setdefaulttimeout(30)
 # Force HTTP/1.1 for better compatibility
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 
-
-
 # ======================================================
-# APP INIT
+# FIREBASE CONFIG (rest of your code continues here...)
 # ======================================================
-app = Flask(__name__)
 
 # ======================================================
 # FIREBASE CONFIG
@@ -1699,6 +1689,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
 
     app.run(host="0.0.0.0", port=port, debug=True)
+
 
 
 
