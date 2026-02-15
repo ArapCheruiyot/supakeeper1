@@ -1667,16 +1667,16 @@ def test_selling_units():
 # ======================================================
 # GOOGLE SITE VERIFICATION
 # ======================================================
-@app.route('/<path:filename>.html')
-def serve_verification_file(filename):
-    """Serve Google verification HTML files"""
+@app.route('/google0da523514258b2c9.html')
+def google_verify():
+    """Serve Google verification file"""
     # First try serving from static folder
     try:
-        return app.send_static_file(f"{filename}.html")
+        return app.send_static_file('google0da523514258b2c9.html')
     except:
         # If not in static, try serving from project root
         from flask import send_from_directory
-        return send_from_directory('.', f"{filename}.html")
+        return send_from_directory('.', 'google0da523514258b2c9.html')
         
 # ======================================================
 # RUN SERVER
@@ -1705,6 +1705,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
 
     app.run(host="0.0.0.0", port=port, debug=True)
+
 
 
 
