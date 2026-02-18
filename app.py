@@ -38,16 +38,22 @@ app.config['PREFERRED_URL_SCHEME'] = 'https'
 # ======================================================
 # FIREBASE CONFIG
 # ======================================================
-if not firebase_admin._apps:
-    firebase_key = os.environ.get("FIREBASE_KEY")
-    
-    if not firebase_key:
-        raise RuntimeError("FIREBASE_KEY environment variable not set")
-    
-    cred = credentials.Certificate(json.loads(firebase_key))
-    firebase_admin.initialize_app(cred)
+import os, json, base64
+import firebase_admin
+from firebase_admin import credentials, firestore
 
-db = firestore.client()
+def initialize_firebase():
+    if not firebase_admin._apps:
+        firebase_key_base64 = os.environ.get("FIREBASE_KEY")
+        if not firebase_key_base64:
+            raise RuntimeError("FIREBASE_KEY not set")
+        decoded_key = base64.b64decode(firebase_key_base64).decode("utf-8")
+        cred = credentials.Certificate(json.loads(decoded_key))
+        firebase_admin.initialize_app(cred)
+    return firestore.client()
+
+db = initialize_firebase()
+
 
 # ======================================================
 # LOAD MODEL - DISABLED (embeddings not needed)
@@ -1704,6 +1710,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
 
     app.run(host="0.0.0.0", port=port, debug=True)
+
 
 
 
