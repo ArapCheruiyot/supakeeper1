@@ -242,10 +242,9 @@
             <div class="founder-profile">
                 <div class="founder-image">
                     <div class="image-container">
-                        <img src="{{ url_for('static', filename='images/founder.PNG') }}" 
-     alt="Moses Kipkorir Cheruiyot"
-     onerror="console.log('Failed to load: ' + this.src); console.log('Image path: ' + this.currentSrc); this.src='https://i.pravatar.cc/300?img=11'"
-     onload="console.log('Successfully loaded: ' + this.src)">
+                        <img src="{{ url_for('static', filename='images/founder.png') }}" 
+                             alt="Moses Kipkorir Cheruiyot"
+                             onerror="this.src='https://i.pravatar.cc/300?img=11'">
                         <div class="image-badge">
                             <span>Founder & CEO</span>
                         </div>
