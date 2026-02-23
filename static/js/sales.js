@@ -34,7 +34,7 @@ const NAV_HEIGHT = 64;
 function initBeepSound() {
     try {
         if (!beepAudio) {
-            beepAudio = new Audio('/static/audios/beep.Mp3');
+            beepAudio = new Audio('/static/audios/beep.mp3');
             beepAudio.volume = 0.3; // Set volume to 30% - not too loud
             console.log('✅ Beep sound initialized');
         }
@@ -1923,3 +1923,4 @@ export {
     batchIntelligence,
     handleOneTap
 };
+
