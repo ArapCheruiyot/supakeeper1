@@ -1,4 +1,4 @@
-// categorisedItems.js (UPDATED: staff support + RBAC + audit logs)
+// categorisedItems.js (UPDATED: Better UX + Empty States + Visual Cues + Bilingual Text + Examples + Clickable Design)
 import { db } from "./firebase-config.js";
 import {
   collection,
@@ -30,6 +30,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeModalX = document.getElementById("close-modal-x");
 
   const itemDetail = document.getElementById("item-detail");
+
+  // Add helper text element if it doesn't exist
+  let modalHelper = document.getElementById("modal-helper");
+  if (!modalHelper && categoryModal) {
+    modalHelper = document.createElement("div");
+    modalHelper.id = "modal-helper";
+    modalHelper.className = "modal-helper-text";
+    categoryModal.querySelector(".modal-content")?.insertBefore(modalHelper, addSubBtn);
+  }
 
   // State
   let currentCategory = null;
@@ -118,7 +127,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function requireManageStockOrBlock() {
     if (!canManageStock()) {
-      alert("Access denied: You don’t have permission to manage stock.");
+      alert("Access denied: You don't have permission to manage stock. / Huna ruhusa ya kudhibiti stock.");
       return false;
     }
     return true;
@@ -169,31 +178,62 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /* ------------------------------
-     Create category DOM node
+     IMPROVED: Create category DOM node with expand/collapse and clickable design
   -------------------------------*/
   function createCategoryNode(name, id) {
     const el = document.createElement("div");
     el.className = "category-item";
-    el.textContent = name;
     el.dataset.id = id;
 
+    // Create container for better styling
+    const content = document.createElement("div");
+    content.className = "category-content";
+    
+    // Category name with icon
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "category-name";
+    nameSpan.textContent = name;
+    
+    // Add expand/collapse indicator
+    const expandIcon = document.createElement("span");
+    expandIcon.className = "expand-icon";
+    expandIcon.innerHTML = "▶"; // Right arrow
+    
+    content.appendChild(nameSpan);
+    content.appendChild(expandIcon);
+    el.appendChild(content);
+    
+    // Children container
     const children = document.createElement("div");
     children.className = "children";
     el.appendChild(children);
-
-    el.addEventListener("click", (e) => {
+    
+    // Toggle expand/collapse on content click
+    content.addEventListener("click", (e) => {
       e.stopPropagation();
+      
+      // Toggle visibility of children
+      if (children.children.length > 0) {
+        children.classList.toggle("visible");
+        expandIcon.innerHTML = children.classList.contains("visible") ? "▼" : "▶";
+      }
+      
+      // Still open modal on click
       currentCategory = el;
       currentNodeData = { id, name };
       if (modalTitle) modalTitle.textContent = `Category: ${name}`;
       showModal();
+      
+      // Add visual feedback for click
+      content.style.transform = "scale(0.99)";
+      setTimeout(() => content.style.transform = "", 100);
     });
 
     return el;
   }
 
   /* ------------------------------
-     Modal helpers
+     Modal helpers (IMPROVED)
   -------------------------------*/
   function showModal() {
     if (!categoryModal) return;
@@ -210,23 +250,81 @@ document.addEventListener("DOMContentLoaded", () => {
 
   closeModalX?.addEventListener("click", hideModal);
 
+  /* ------------------------------
+     IMPROVED: Update modal buttons with clear guidance (BILINGUAL + EXAMPLES)
+  -------------------------------*/
   function updateModalButtons() {
     if (!currentCategory) return;
 
     // RBAC: hide mutation actions if cannot manage stock
     const allow = canManageStock();
-    addSubBtn.style.display = allow ? "inline-block" : "none";
-    addItemBtn.style.display = allow ? "inline-block" : "none";
-    deleteCatBtn.style.display = allow ? "inline-block" : "none";
-
+    
     const children = currentCategory.querySelector(".children")?.children || [];
     const hasSubcategories = Array.from(children).some(c => c.classList.contains("category-item"));
     const hasItems = Array.from(children).some(c => c.classList.contains("item"));
 
-    // original logic
-    if (allow) {
-      addSubBtn.style.display = hasItems ? "none" : "inline-block";
-      addItemBtn.style.display = hasSubcategories ? "none" : "inline-block";
+    // Update button text with context (bilingual)
+    if (addSubBtn) {
+      addSubBtn.innerHTML = hasItems 
+        ? '📁 Cannot add subcategory (has items) / <i>Huwezi kuongeza tanzu (ina bidhaa)</i>' 
+        : '📁 Add Subcategory / <i>Ongeza Tanzu</i>';
+      addSubBtn.disabled = hasItems || !allow;
+      addSubBtn.title = hasItems ? "This category already has items" : "Add a new subcategory";
+    }
+    
+    if (addItemBtn) {
+      addItemBtn.innerHTML = hasSubcategories 
+        ? '📦 Cannot add item (has subcategories) / <i>Huwezi kuongeza bidhaa (ina tanzu)</i>' 
+        : '📦 Add Item / <i>Ongeza Bidhaa</i>';
+      addItemBtn.disabled = hasSubcategories || !allow;
+      addItemBtn.title = hasSubcategories ? "This category has subcategories - add items to leaf categories" : "Add a new item";
+    }
+    
+    if (deleteCatBtn) {
+      deleteCatBtn.innerHTML = '🗑️ Delete Category / <i>Futa Aina</i>';
+      deleteCatBtn.disabled = !allow;
+    }
+    
+    // Show/hide based on permissions
+    addSubBtn.style.display = allow ? "inline-block" : "none";
+    addItemBtn.style.display = allow ? "inline-block" : "none";
+    deleteCatBtn.style.display = allow ? "inline-block" : "none";
+    
+    // Update helper text with guidance AND EXAMPLES (bilingual)
+    if (modalHelper) {
+      if (!allow) {
+        modalHelper.innerHTML = "You don't have permission to manage stock. / <i>Huna ruhusa ya kudhibiti stock.</i>";
+      } else if (hasSubcategories && hasItems) {
+        modalHelper.innerHTML = "This category contains both subcategories and items. / <i>Aina hii ina tanzu na bidhaa.</i>";
+      } else if (hasSubcategories) {
+        modalHelper.innerHTML = `
+          <strong>This category has subcategories.</strong> / <i><strong>Aina hii ina tanzu.</strong></i><br>
+          Add items only to leaf categories (subcategories with no further subcategories).<br>
+          <i>Ongeza bidhaa kwenye tanzu za mwisho pekee (tanzu ambazo hazina tanzu nyingine).</i><br>
+          <span style="display:block; background:#f0f9ff; padding:5px; margin-top:5px; border-radius:4px;">
+            💡 Example: "Drinks" → "Sodas" → (add items like "Coca-Cola", "Pepsi" here)
+          </span>
+        `;
+      } else if (hasItems) {
+        modalHelper.innerHTML = `
+          <strong>This category has items.</strong> / <i><strong>Aina hii ina bidhaa.</strong></i><br>
+          Cannot add subcategories here. Create a new category if you need subcategories.<br>
+          <i>Huwezi kuongeza tanzu hapa. Unda aina mpya ikiwa unahitaji tanzu.</i><br>
+          <span style="display:block; background:#f0f9ff; padding:5px; margin-top:5px; border-radius:4px;">
+            💡 Example: "Soft Drinks" (category) → "Coca-Cola", "Fanta", "Sprite" (items)
+          </span>
+        `;
+      } else {
+        modalHelper.innerHTML = `
+          <strong>Add subcategories or items to organize your stock.</strong> / <i><strong>Ongeza tanzu au bidhaa kupanga stock yako.</strong></i><br>
+          <span style="display:block; background:#f0f9ff; padding:8px; margin-top:8px; border-radius:4px;">
+            📁 <strong>Subcategory example:</strong> "Drinks" → "Sodas", "Juices", "Water"<br>
+            📦 <strong>Item example:</strong> "Sodas" → "Coca-Cola", "Pepsi", "Fanta"<br>
+            <i>📁 <strong>Mfano wa tanzu:</strong> "Vinywaji" → "Soda", "Juisi", "Maji"</i><br>
+            <i>📦 <strong>Mfano wa bidhaa:</strong> "Soda" → "Coca-Cola", "Pepsi", "Fanta"</i>
+          </span>
+        `;
+      }
     }
   }
 
@@ -241,6 +339,9 @@ document.addEventListener("DOMContentLoaded", () => {
       itemDetail.setAttribute("aria-hidden", "true");
     }
     injectCategoriesCloseButton();
+    
+    // Add a class to body for potential overlay-specific styling
+    document.body.classList.add("categories-overlay-open");
   }
 
   function closeCategoriesOverlay() {
@@ -255,6 +356,7 @@ document.addEventListener("DOMContentLoaded", () => {
       itemDetail.setAttribute("aria-hidden", "true");
     }
     hideModal();
+    document.body.classList.remove("categories-overlay-open");
   }
 
   function injectCategoriesCloseButton() {
@@ -263,7 +365,7 @@ document.addEventListener("DOMContentLoaded", () => {
       closeBtn.id = "categories-close-btn";
       closeBtn.className = "close-x";
       closeBtn.setAttribute("role", "button");
-      closeBtn.setAttribute("aria-label", "Close categories and go back to dashboard");
+      closeBtn.setAttribute("aria-label", "Close categories and go back to dashboard / Funga aina na urudi kwenye dashibodi");
       closeBtn.innerHTML = "&times;";
       closeBtn.style.position = "absolute";
       closeBtn.style.top = "10px";
@@ -281,13 +383,39 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /* ------------------------------
-     Load categories and items
+     IMPROVED: Load categories with empty state (BILINGUAL + EXAMPLES)
   -------------------------------*/
   async function loadCategories() {
     if (!currentShopId) return;
     categoriesList.innerHTML = "";
 
     const catSnap = await getDocs(collection(db, ...categoriesCollectionPath(currentShopId)));
+    
+    // Show empty state if no categories (bilingual + examples)
+    if (catSnap.empty) {
+      const emptyMsg = document.createElement("div");
+      emptyMsg.className = "empty-state";
+      emptyMsg.innerHTML = `
+        <div style="font-size: 3rem; margin-bottom: 0.5rem;">📂</div>
+        <p style="font-weight: bold; margin-bottom: 0.5rem;">No categories yet / <i>Hakuna aina bado</i></p>
+        <p style="font-size: 0.9rem; color: #64748b; margin-bottom: 1rem;">Start by creating your first category / <i>Anza kwa kuunda aina yako ya kwanza</i></p>
+        <div style="background: #f0f9ff; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem; text-align: left;">
+          <p style="font-weight: bold; margin-bottom: 0.25rem;">💡 Examples / <i>Mifano:</i></p>
+          <p style="margin: 0.25rem 0;">• Drinks / <i>Vinywaji</i></p>
+          <p style="margin: 0.25rem 0;">• Food / <i>Chakula</i></p>
+          <p style="margin: 0.25rem 0;">• Clothes / <i>Nguo</i></p>
+        </div>
+        <button id="empty-state-category-btn" class="btn-start" style="padding: 0.5rem 1rem; font-size: 0.9rem;">+ Create Category / <i>Unda Aina</i></button>
+      `;
+      categoriesList.appendChild(emptyMsg);
+      
+      // Add event listener to the button
+      document.getElementById("empty-state-category-btn")?.addEventListener("click", () => {
+        categoriesBtn?.click();
+      });
+      return;
+    }
+
     const map = {};
 
     catSnap.forEach(d => {
@@ -308,6 +436,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
     for (const catId of Object.keys(map)) {
       const itemsSnap = await getDocs(collection(db, ...itemsCollectionPath(currentShopId, catId)));
+      
+      // Show empty state for categories with no items (bilingual + examples)
+      if (itemsSnap.empty) {
+        const parent = map[catId]?.node;
+        if (!parent) continue;
+        
+        const emptyItemMsg = document.createElement("div");
+        emptyItemMsg.className = "empty-items-hint";
+        emptyItemMsg.innerHTML = `
+          <span style="color: #94a3b8; font-size: 0.8rem;">
+            (No items - click category to add) / <i>(Hakuna bidhaa - bofya aina kuongeza)</i>
+          </span>
+          <div style="background: #f0f9ff; padding: 0.5rem; margin-top: 0.5rem; border-radius: 4px; font-size: 0.8rem;">
+            💡 Examples / <i>Mifano</i>: 
+            "Coca-Cola", "Fanta", "Sprite" for Drinks category<br>
+            <i>"Coca-Cola", "Fanta", "Sprite" kwa aina ya Vinywaji</i>
+          </div>
+        `;
+        parent.querySelector(".children").appendChild(emptyItemMsg);
+        continue;
+      }
+      
       itemsSnap.forEach(d => {
         const data = d.data();
         const parent = map[catId]?.node;
@@ -315,13 +465,46 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const item = document.createElement("div");
         item.className = "item";
-        item.textContent = data.name;
+        
+        // Add item name with visual indicator
+        const itemText = document.createElement("span");
+        itemText.className = "item-text";
+        itemText.textContent = data.name;
+        
+        // Add subtle hint that it's clickable
+        const clickHint = document.createElement("span");
+        clickHint.className = "item-click-hint";
+        clickHint.innerHTML = "🔍";
+        clickHint.style.opacity = "0.3";
+        clickHint.style.marginLeft = "8px";
+        clickHint.style.fontSize = "12px";
+        
+        item.appendChild(itemText);
+        item.appendChild(clickHint);
         item.dataset.id = d.id;
+
+        // Add hover effect to show click hint
+        item.addEventListener("mouseenter", () => {
+          clickHint.style.opacity = "1";
+        });
+        
+        item.addEventListener("mouseleave", () => {
+          clickHint.style.opacity = "0.3";
+        });
 
         attachItemHandlerWithRetry(item, data.name, currentShopId, catId, d.id);
         parent.querySelector(".children").appendChild(item);
       });
     }
+    
+    // After loading, expand root categories by default for better visibility
+    document.querySelectorAll(".category-item > .children").forEach(child => {
+      if (child.children.length > 0) {
+        child.classList.add("visible");
+        const expandIcon = child.parentElement?.querySelector(".expand-icon");
+        if (expandIcon) expandIcon.innerHTML = "▼";
+      }
+    });
   }
 
   window.reloadShopCategories = loadCategories;
@@ -359,7 +542,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // You may allow staff to view but not edit; up to you.
     // If you want staff L1 to not even open overlay, enforce here:
     if (!canManageStock()) {
-      alert("Access denied: You don’t have permission to manage stock.");
+      alert("Access denied: You don't have permission to manage stock. / Huna ruhusa ya kudhibiti stock.");
       return;
     }
     showCategoriesOverlay();
@@ -507,15 +690,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!requireManageStockOrBlock()) return;
     if (!currentShopId) return;
 
-    const name = prompt("Enter category name:");
+    const name = prompt("Enter category name (e.g., Drinks, Food, Clothes): / Ingiza jina la aina (mfano: Vinywaji, Chakula, Nguo):");
     if (!name?.trim()) return;
     const clean = name.trim();
 
     const { exists, docId } = await nameExistsInCollection(categoriesCollectionPath(currentShopId), clean);
     if (exists) {
-      const confirmEdit = confirm(`Category "${clean}" already exists. Do you want to rename it?`);
+      const confirmEdit = confirm(`Category "${clean}" already exists. Do you want to rename it? / Aina "${clean}" tayari ipo. Unataka kuibadilisha jina?`);
       if (!confirmEdit) return;
-      const newName = prompt("Enter new name for category:", clean);
+      const newName = prompt("Enter new name for category: / Ingiza jina jipya la aina:", clean);
       if (!newName?.trim()) return;
       await updateNameInCollection(categoriesCollectionPath(currentShopId), docId, newName.trim());
       await loadCategories();
@@ -527,9 +710,19 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!id) return;
       const node = createCategoryNode(clean, id);
       categoriesList.appendChild(node);
+      
+      // Auto-expand new category
+      setTimeout(() => {
+        const expandIcon = node.querySelector(".expand-icon");
+        const children = node.querySelector(".children");
+        if (children && expandIcon) {
+          children.classList.add("visible");
+          expandIcon.innerHTML = "▼";
+        }
+      }, 100);
     } catch (err) {
       console.error("Failed to create category", err);
-      alert("Failed to create category. See console for details.");
+      alert("Failed to create category. See console for details. / Imeshindwa kuunda aina. Tafadhali angalia console kwa maelezo.");
     }
   });
 
@@ -537,15 +730,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!requireManageStockOrBlock()) return;
     if (!currentCategory || !currentShopId) return;
 
-    const name = prompt("Enter subcategory name:");
+    const name = prompt("Enter subcategory name (e.g., Sodas, Juices, Water): / Ingiza jina la tanzu (mfano: Soda, Juisi, Maji):");
     if (!name?.trim()) return;
     const clean = name.trim();
 
     const { exists, docId } = await nameExistsInCollection(categoriesCollectionPath(currentShopId), clean);
     if (exists) {
-      const confirmEdit = confirm(`Subcategory "${clean}" already exists. Do you want to rename it?`);
+      const confirmEdit = confirm(`Subcategory "${clean}" already exists. Do you want to rename it? / Tanzu "${clean}" tayari ipo. Unataka kuibadilisha jina?`);
       if (!confirmEdit) return;
-      const newName = prompt("Enter new name for subcategory:", clean);
+      const newName = prompt("Enter new name for subcategory: / Ingiza jina jipya la tanzu:", clean);
       if (!newName?.trim()) return;
       await updateNameInCollection(categoriesCollectionPath(currentShopId), docId, newName.trim());
       await loadCategories();
@@ -557,10 +750,19 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!id) return;
       const node = createCategoryNode(clean, id);
       currentCategory.querySelector(".children").appendChild(node);
+      
+      // Auto-expand parent to show new subcategory
+      const children = currentCategory.querySelector(".children");
+      const expandIcon = currentCategory.querySelector(".expand-icon");
+      if (children && expandIcon) {
+        children.classList.add("visible");
+        expandIcon.innerHTML = "▼";
+      }
+      
       hideModal();
     } catch (err) {
       console.error("Failed to create subcategory", err);
-      alert("Failed to create subcategory. See console for details.");
+      alert("Failed to create subcategory. See console for details. / Imeshindwa kuunda tanzu. Tafadhali angalia console kwa maelezo.");
     }
   });
 
@@ -570,20 +772,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const isLeaf = await isLeafCategory(currentShopId, currentCategory.dataset.id);
     if (!isLeaf) {
-      alert("This category has subcategories. Add items only to a leaf category.");
+      alert("This category has subcategories. Add items only to a leaf category. / Aina hii ina tanzu. Ongeza bidhaa kwenye tanzu za mwisho pekee.");
       return;
     }
 
-    const name = prompt("Enter item name:");
+    const name = prompt("Enter item name (e.g., Coca-Cola, Fanta, Sprite): / Ingiza jina la bidhaa (mfano: Coca-Cola, Fanta, Sprite):");
     if (!name?.trim()) return;
     const clean = name.trim();
 
     const itemsPath = itemsCollectionPath(currentShopId, currentCategory.dataset.id);
     const { exists, docId } = await nameExistsInCollection(itemsPath, clean);
     if (exists) {
-      const confirmEdit = confirm(`Item "${clean}" already exists. Do you want to rename it?`);
+      const confirmEdit = confirm(`Item "${clean}" already exists. Do you want to rename it? / Bidhaa "${clean}" tayari ipo. Unataka kuibadilisha jina?`);
       if (!confirmEdit) return;
-      const newName = prompt("Enter new name for item:", clean);
+      const newName = prompt("Enter new name for item: / Ingiza jina jipya la bidhaa:", clean);
       if (!newName?.trim()) return;
       await updateNameInCollection(itemsPath, docId, newName.trim());
       await loadCategories();
@@ -594,17 +796,51 @@ document.addEventListener("DOMContentLoaded", () => {
       const id = await saveItem(clean, currentCategory.dataset.id, { stock: 0 });
       if (!id) return;
 
+      // Remove empty items hint if it exists
+      const childrenContainer = currentCategory.querySelector(".children");
+      const emptyHint = childrenContainer.querySelector(".empty-items-hint");
+      if (emptyHint) emptyHint.remove();
+
       const item = document.createElement("div");
       item.className = "item";
-      item.textContent = clean;
+      
+      const itemText = document.createElement("span");
+      itemText.className = "item-text";
+      itemText.textContent = clean;
+      
+      const clickHint = document.createElement("span");
+      clickHint.className = "item-click-hint";
+      clickHint.innerHTML = "🔍";
+      clickHint.style.opacity = "0.3";
+      clickHint.style.marginLeft = "8px";
+      clickHint.style.fontSize = "12px";
+      
+      item.appendChild(itemText);
+      item.appendChild(clickHint);
       item.dataset.id = id;
+      
+      item.addEventListener("mouseenter", () => {
+        clickHint.style.opacity = "1";
+      });
+      
+      item.addEventListener("mouseleave", () => {
+        clickHint.style.opacity = "0.3";
+      });
 
       attachItemHandlerWithRetry(item, clean, currentShopId, currentCategory.dataset.id, id);
-      currentCategory.querySelector(".children").appendChild(item);
+      childrenContainer.appendChild(item);
+      
+      // Auto-expand to show new item
+      const expandIcon = currentCategory.querySelector(".expand-icon");
+      if (childrenContainer && expandIcon) {
+        childrenContainer.classList.add("visible");
+        expandIcon.innerHTML = "▼";
+      }
+      
       hideModal();
     } catch (err) {
       console.error("Failed to create item", err);
-      alert("Failed to create item. See console for details.");
+      alert("Failed to create item. See console for details. / Imeshindwa kuunda bidhaa. Tafadhali angalia console kwa maelezo.");
     }
   });
 
@@ -612,7 +848,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!requireManageStockOrBlock()) return;
     if (!currentCategory || !currentShopId) return;
 
-    const ok = confirm("Delete this category/subcategory? This will not delete child categories or items automatically.");
+    const ok = confirm("Delete this category/subcategory? This will not delete child categories or items automatically. / Futa aina/tanzu hii? Haitafuta aina au bidhaa ndogo moja kwa moja.");
     if (!ok) return;
 
     const id = currentCategory.dataset.id;
@@ -624,7 +860,7 @@ document.addEventListener("DOMContentLoaded", () => {
       hideModal();
     } catch (err) {
       console.error("Failed to delete category", err);
-      alert("Failed to delete category. See console for details.");
+      alert("Failed to delete category. See console for details. / Imeshindwa kufuta aina. Tafadhali angalia console kwa maelezo.");
     }
   });
 

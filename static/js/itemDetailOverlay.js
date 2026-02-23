@@ -1,14 +1,9 @@
-// itemDetailOverlay.js - UPDATED WITH BEST 2-IMAGE SEAMLESS CAPTURE (STREAM MODAL + FALLBACK)
-// ✅ Preserves existing functionality
-// ✅ Requires 2 item images (like selling unit requirement)
-// ✅ BEST: Seamless capture using getUserMedia (camera stays open) - FULLSCREEN VERSION
-// ✅ FALLBACK: Button-driven file picker capture (each capture triggered by user click)
-// ✅ Fixes cancel/hang issues on file input
-// ✅ Saves images to Cloudinary (unsigned)
-// ✅ Sets overlay dataset for other modules (selling units)
-// ✅ Emits lifecycle events (opened/base-unit-set/closed)
-// ✅ Exposes getCurrentItemContext()
-// ✅ Prompts per-selling-unit price at every stock intake (create/missing/optional update)
+// itemDetailOverlay.js - COMPLETE VERSION WITH ORIGINAL VISUAL CHARM + BILINGUAL TEXT + KSH CURRENCY
+// ✅ Preserves ALL existing functionality
+// ✅ Restores original visual design (icons, lines, sections)
+// ✅ Keeps bilingual text (English + Swahili)
+// ✅ Changed all currency from $ to KSh for Kenyan market
+// ✅ Maintains all improvements
 
 import { db } from "./firebase-config.js";
 import {
@@ -42,7 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let captureInProgress = false;
   let editMode = false;
 
-  console.log("itemDetailOverlay.js loaded (best 2-image seamless capture) - FULLSCREEN VERSION");
+  console.log("itemDetailOverlay.js loaded with original visual charm + bilingual text + KSh currency");
 
   // One-time: wire Selling Units module if present
   try {
@@ -129,23 +124,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
     editToggleBtn.disabled = true;
     editToggleBtn.style.opacity = "0.6";
-    editToggleBtn.title = "Access denied: you cannot edit items/stock.";
-    editToggleBtn.textContent = "Edit";
+    editToggleBtn.title = "Access denied: you cannot edit items/stock. / Huna ruhusa ya kuhariri bidhaa.";
+    editToggleBtn.textContent = "Edit / Hariri";
     editMode = false;
   }
 
   // =========================================================
-  // UNIT & BATCH HELPERS
+  // UNIT & BATCH HELPERS (BILINGUAL) - UPDATED TO KSH
   // =========================================================
   async function getBaseUnitFromUser(itemName) {
     const exampleText =
-      `How do you measure "${itemName}"?\n\n` +
-      `Examples:\n` +
-      `• "bag" for sugar (you buy in bags)\n` +
-      `• "kg" for rice (you buy by weight)\n` +
-      `• "carton" for soap (comes in cartons)\n` +
-      `• "piece" for items you count\n\n` +
-      `Enter your measurement unit:`;
+      `How do you measure "${itemName}"? / Unapimaje "${itemName}"?\n\n` +
+      `Examples / Mifano:\n` +
+      `• "bag" / "gunia" for sugar / sukari\n` +
+      `• "kg" for rice / mchele\n` +
+      `• "carton" / "katoni" for soap / sabuni\n` +
+      `• "piece" / "kipande" for items you count / bidhaa unazohesabu\n\n` +
+      `Enter your measurement unit: / Weka kipimo chako:`;
 
     const unit = prompt(exampleText, "piece");
     return unit ? unit.trim().toLowerCase() : "piece";
@@ -157,11 +152,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const currentSell = itemData.sellPrice || 0;
 
     if (isFirstBatch) {
-      const buyMsg = `Buying price per ${unit}?\nExample: $30 per bag`;
+      const buyMsg = `Buying price per ${unit}? / Bei ya kununua kwa ${unit}?\nExample / Mfano: KSh 3000 per bag / kwa gunia`;
       const buyPrice = parseFloat(prompt(buyMsg, currentBuy || ""));
       if (isNaN(buyPrice)) return null;
 
-      const sellMsg = `Selling price per ${unit}?\nExample: $35 per bag`;
+      const sellMsg = `Selling price per ${unit}? / Bei ya kuuza kwa ${unit}?\nExample / Mfano: KSh 3500 per bag / kwa gunia`;
       const sellPrice = parseFloat(prompt(sellMsg, currentSell || ""));
       if (isNaN(sellPrice)) return null;
 
@@ -169,15 +164,15 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const msg =
-      `Adding more stock of "${itemData.name}"\n\n` +
-      `Current prices (per ${unit}):\n` +
-      `Buy: $${currentBuy} | Sell: $${currentSell}\n\n` +
-      `Have prices changed?\n` +
-      `• Enter "b" to update buy price only\n` +
-      `• Enter "s" to update sell price only\n` +
-      `• Enter "bs" to update both\n` +
-      `• Enter "n" for no change\n\n` +
-      `Enter your choice (b/s/bs/n):`;
+      `Adding more stock of "${itemData.name}" / Unaongeza stock ya "${itemData.name}"\n\n` +
+      `Current prices / Bei za sasa (per ${unit}):\n` +
+      `Buy / Kununua: KSh ${currentBuy} | Sell / Kuuza: KSh ${currentSell}\n\n` +
+      `Have prices changed? / Bei zimebadilika?\n` +
+      `• Enter "b" to update buy price only / Bonyeza "b" kubadilisha bei ya kununua tu\n` +
+      `• Enter "s" to update sell price only / Bonyeza "s" kubadilisha bei ya kuuza tu\n` +
+      `• Enter "bs" to update both / Bonyeza "bs" kubadilisha zote\n` +
+      `• Enter "n" for no change / Bonyeza "n" ikiwa hazijabadilika\n\n` +
+      `Enter your choice / Weka chaguo lako (b/s/bs/n):`;
 
     const choice = prompt(msg, "n")?.toLowerCase() || "n";
 
@@ -187,7 +182,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let updateSell = false;
 
     if (choice.includes("b")) {
-      const newBuy = parseFloat(prompt(`New buying price per ${unit}:`, currentBuy));
+      const newBuy = parseFloat(prompt(`New buying price per ${unit}: / Bei mpya ya kununua kwa ${unit}:`, currentBuy));
       if (!isNaN(newBuy)) {
         buyPrice = newBuy;
         updateBuy = true;
@@ -195,7 +190,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (choice.includes("s")) {
-      const newSell = parseFloat(prompt(`New selling price per ${unit}:`, currentSell));
+      const newSell = parseFloat(prompt(`New selling price per ${unit}: / Bei mpya ya kuuza kwa ${unit}:`, currentSell));
       if (!isNaN(newSell)) {
         sellPrice = newSell;
         updateSell = true;
@@ -224,7 +219,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // =========================================================
-  // SELL-UNITS PRICING HELPERS
+  // SELL-UNITS PRICING HELPERS (BILINGUAL) - UPDATED TO KSH
   // =========================================================
   async function fetchSellUnits(shopId, categoryId, itemId) {
     const colNames = ["sellUnits", "sellingUnits"];
@@ -253,15 +248,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (u.sellPrice == null) {
           let val = prompt(
-            `Set selling price for "${u.name}" (no price yet)\n` +
-            `Suggestion: ${suggested} (main price ÷ ${conv})\n\n` +
-            `Enter price per ${u.name}:`,
+            `Set selling price for "${u.name}" (no price yet) / Weka bei ya kuuza kwa "${u.name}" (hakuna bei bado)\n` +
+            `Suggestion / Mapendekezo: KSh ${suggested} (main price ÷ ${conv})\n\n` +
+            `Enter price per ${u.name}: / Weka bei kwa ${u.name}:`,
             String(suggested)
           );
           if (val === null) continue;
           const price = parseFloat(val);
           if (!isFinite(price) || price <= 0) {
-            alert(`Skipping "${u.name}" — invalid price.`);
+            alert(`Skipping "${u.name}" — invalid price. / "${u.name}" imerukwa — bei si sahihi.`);
             continue;
           }
           const uRef = doc(db, "Shops", ctx.shopId, "categories", ctx.categoryId, "items", ctx.itemId, u.__col || "sellUnits", u.id);
@@ -275,21 +270,21 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const wantsChange = confirm(
-          `"${u.name}" current price: ${u.sellPrice}\n` +
-          `Suggested (main price ÷ ${conv}): ${suggested}\n\n` +
-          `Do you want to change it now?`
+          `"${u.name}" current price / bei ya sasa: KSh ${u.sellPrice}\n` +
+          `Suggested / Mapendekezo (main price ÷ ${conv}): KSh ${suggested}\n\n` +
+          `Do you want to change it now? / Unataka kuibadilisha sasa?`
         );
         if (!wantsChange) continue;
 
         let val = prompt(
-          `Enter new price for "${u.name}":\n` +
-          `Suggestion: ${suggested}`,
+          `Enter new price for "${u.name}": / Weka bei mpya ya "${u.name}":\n` +
+          `Suggestion / Mapendekezo: KSh ${suggested}`,
           String(u.sellPrice)
         );
         if (val === null) continue;
         const price = parseFloat(val);
         if (!isFinite(price) || price <= 0) {
-          alert(`Skipping "${u.name}" — invalid price.`);
+          alert(`Skipping "${u.name}" — invalid price. / "${u.name}" imerukwa — bei si sahihi.`);
           continue;
         }
         const uRef = doc(db, "Shops", ctx.shopId, "categories", ctx.categoryId, "items", ctx.itemId, u.__col || "sellUnits", u.id);
@@ -306,7 +301,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // =========================================================
-  // STYLES - UPDATED WITH FULLSCREEN CAMERA MODAL
+  // STYLES - RESTORED ORIGINAL VISUAL CHARM
   // =========================================================
   function injectAlertStyles() {
     if (document.getElementById("alert-styles")) return;
@@ -350,7 +345,7 @@ document.addEventListener("DOMContentLoaded", () => {
       #item-detail .retake-btn { background: #ff6b6b; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; }
       #item-detail .pencil { color: white; }
 
-      .alert-slider-container { margin: 20px 0; padding: 15px; background: #f0fff0; border: 2ed573; border-radius: 10px; transition: all 0.3s ease; clear: both; }
+      .alert-slider-container { margin: 20px 0; padding: 15px; background: #f0fff0; border: 2px solid #2ed573; border-radius: 10px; transition: all 0.3s ease; clear: both; }
       .alert-slider-container.alert-active { background: #fff5f5; border-color: #ff6b6b; }
       .alert-slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
       .alert-title { font-size: 16px; font-weight: bold; color: #2ed573; }
@@ -382,6 +377,28 @@ document.addEventListener("DOMContentLoaded", () => {
         #item-detail .image-slot:last-child { margin-right: 0 !important; }
       }
 
+      /* Tiny graph icon and section separators - RESTORED */
+      .section-icon { font-size: 18px; margin-right: 8px; vertical-align: middle; }
+      .section-divider { height: 1px; background: linear-gradient(to right, transparent, #ccc, transparent); margin: 20px 0; }
+      .tiny-graph { display: inline-block; width: 12px; height: 12px; background: #4f46e5; border-radius: 2px; margin-right: 4px; }
+      
+      .batch-item { 
+        padding: 8px; margin: 4px 0; background: white; border-radius: 6px; 
+        border-left: 3px solid #28a745; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      }
+      .batch-item.old-batch { border-left-color: #f59e0b; }
+
+      .stock-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 500;
+      }
+      .stock-badge.healthy { background: #10b98120; color: #10b981; }
+      .stock-badge.warning { background: #f59e0b20; color: #f59e0b; }
+      .stock-badge.critical { background: #ef444420; color: #ef4444; }
+
       /* Camera modal (seamless capture) - FULLSCREEN */
       .sk-cam-backdrop{
         position: fixed;
@@ -389,7 +406,6 @@ document.addEventListener("DOMContentLoaded", () => {
         background: #000;
         z-index: 25000;
       }
-
       .sk-cam-sheet{
         position: fixed;
         inset: 0;
@@ -402,8 +418,6 @@ document.addEventListener("DOMContentLoaded", () => {
         display: flex;
         flex-direction: column;
       }
-
-      /* top bar */
       .sk-cam-topbar{
         display: flex;
         align-items: center;
@@ -413,21 +427,17 @@ document.addEventListener("DOMContentLoaded", () => {
         background: linear-gradient(to bottom, rgba(0,0,0,.75), rgba(0,0,0,0));
         z-index: 2;
       }
-
       .sk-cam-title{
         font-weight: 700;
         font-size: 15px;
         line-height: 1.2;
       }
-
-      /* video area full screen */
       .sk-cam-view{
         position: relative;
         flex: 1;
         width: 100%;
         overflow: hidden;
       }
-
       .sk-cam-video{
         position: absolute;
         inset: 0;
@@ -435,8 +445,6 @@ document.addEventListener("DOMContentLoaded", () => {
         height: 100%;
         object-fit: cover;
       }
-
-      /* thumbs overlay */
       .sk-cam-hud{
         position: absolute;
         top: 12px;
@@ -449,7 +457,6 @@ document.addEventListener("DOMContentLoaded", () => {
         z-index: 2;
         pointer-events: none;
       }
-
       .sk-cam-thumbs{ display:flex; gap:10px; pointer-events:none; }
       .sk-cam-thumb{
         width:56px; height:56px; border-radius:10px;
@@ -460,8 +467,6 @@ document.addEventListener("DOMContentLoaded", () => {
         font-size:12px; color:#ddd;
       }
       .sk-cam-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
-
-      /* bottom bar */
       .sk-cam-bottombar{
         padding: 12px 12px calc(env(safe-area-inset-bottom, 0px) + 14px);
         background: linear-gradient(to top, rgba(0,0,0,.75), rgba(0,0,0,0));
@@ -471,7 +476,6 @@ document.addEventListener("DOMContentLoaded", () => {
         gap: 10px;
         z-index: 2;
       }
-
       .sk-cam-status{
         position: absolute;
         left: 12px;
@@ -483,8 +487,6 @@ document.addEventListener("DOMContentLoaded", () => {
         color: rgba(255,255,255,.9);
         text-shadow: 0 1px 3px rgba(0,0,0,.7);
       }
-
-      /* buttons */
       .sk-btn{
         border:none; border-radius:10px;
         padding:12px 14px;
@@ -493,8 +495,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       .sk-btn-secondary{ background:#2d2d2d; color:#fff; }
       .sk-btn-danger{ background:#c0392b; color:#fff; }
-
-      /* shutter button (big) */
       .sk-shutter{
         width: 74px;
         height: 74px;
@@ -509,7 +509,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // =========================================================
-  // ALERT HELPERS
+  // ALERT HELPERS (BILINGUAL)
   // =========================================================
   function updateAlertSliderValue(sliderId, displayId) {
     const slider = document.getElementById(sliderId);
@@ -527,7 +527,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function saveAlertSettings() {
     if (!currentItem) return;
     if (!canManageStock()) {
-      alert("Access denied: You don't have permission to change alert settings.");
+      alert("Access denied: You don't have permission to change alert settings. / Huna ruhusa ya kubadilisha mipangilio ya arifa.");
       return;
     }
 
@@ -552,18 +552,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
       currentItem.data.lowStockAlert = alertValue;
       currentItem.data.alertDescription = alertDescription || null;
+      
+      showStatus("✅ Alert settings saved / Mipangilio ya arifa imehifadhiwa");
+      setTimeout(() => clearStatus(), 2000);
+      
       renderItemMeta(currentItem.data);
     } catch (error) {
       console.error("❌ Error saving alert:", error);
-      alert("Failed to save alert settings. Please try again.");
+      alert("Failed to save alert settings. Please try again. / Imeshindwa kuhifadhi mipangilio ya arifa. Tafadhali jaribu tena.");
     }
   }
 
   function getBufferStatus(stock, threshold) {
     const buffer = stock - threshold;
-    if (buffer > 10) return { class: "healthy", text: "Healthy Buffer" };
-    if (buffer > 0) return { class: "warning", text: "Low Buffer" };
-    return { class: "critical", text: "Needs Attention" };
+    if (buffer > 10) return { class: "healthy", text: "Healthy Buffer / Hifadhi ya Kutosha" };
+    if (buffer > 0) return { class: "warning", text: "Low Buffer / Hifadhi Ndogo" };
+    return { class: "critical", text: "Needs Attention / Inahitaji Uangalizi" };
   }
 
   // =========================================================
@@ -593,12 +597,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // =========================================================
-  // EDIT/SAVE TOGGLE
+  // EDIT/SAVE TOGGLE (BILINGUAL)
   // =========================================================
   if (editToggleBtn) {
     editToggleBtn.addEventListener("click", async () => {
       if (!canManageStock()) {
-        alert("Access denied: You don't have permission to edit items.");
+        alert("Access denied: You don't have permission to edit items. / Huna ruhusa ya kuhariri bidhaa.");
         return;
       }
       if (!currentItem) return;
@@ -606,10 +610,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (editMode) {
         await saveEdits();
         editMode = false;
-        editToggleBtn.textContent = "Edit";
+        editToggleBtn.textContent = "Edit / Hariri";
       } else {
         editMode = true;
-        editToggleBtn.textContent = "Save";
+        editToggleBtn.textContent = "Save / Hifadhi";
       }
       renderItemMeta(currentItem?.data);
     });
@@ -650,9 +654,12 @@ document.addEventListener("DOMContentLoaded", () => {
       currentItem.name = updatedName;
 
       itemDetail.dataset.itemName = updatedName;
+      
+      showStatus("✅ Changes saved / Mabadiliko yamehifadhiwa");
+      setTimeout(() => clearStatus(), 2000);
     } catch (error) {
       console.error("Error updating item:", error);
-      alert("Failed to save changes. Please try again.");
+      alert("Failed to save changes. Please try again. / Imeshindwa kuhifadhi mabadiliko. Tafadhali jaribu tena.");
     }
   }
 
@@ -661,13 +668,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // =========================================================
   async function showItemDetail(name, uid, categoryId, itemId) {
     editMode = false;
-    if (editToggleBtn) editToggleBtn.textContent = "Edit";
+    if (editToggleBtn) editToggleBtn.textContent = "Edit / Hariri";
 
     injectAlertStyles();
 
     const shopId = getActiveShopId();
     if (!shopId) {
-      alert("Missing shop context. Please login again.");
+      alert("Missing shop context. Please login again. / Hakuna duka lililochaguliwa. Tafadhali ingia tena.");
       window.location.href = "/";
       return;
     }
@@ -738,7 +745,7 @@ document.addEventListener("DOMContentLoaded", () => {
       closeBtn.id = "item-detail-close-btn";
       closeBtn.className = "close-x";
       closeBtn.setAttribute("role", "button");
-      closeBtn.setAttribute("aria-label", "Close item detail and go back to categories");
+      closeBtn.setAttribute("aria-label", "Close item detail and go back to categories / Funga bidhaa na urudi kwenye aina");
       closeBtn.innerHTML = "&times;";
       closeBtn.style.position = "absolute";
       closeBtn.style.top = "10px";
@@ -746,11 +753,32 @@ document.addEventListener("DOMContentLoaded", () => {
       closeBtn.style.fontSize = "24px";
       closeBtn.style.cursor = "pointer";
       closeBtn.style.zIndex = "1002";
+      closeBtn.style.width = "32px";
+      closeBtn.style.height = "32px";
+      closeBtn.style.display = "flex";
+      closeBtn.style.alignItems = "center";
+      closeBtn.style.justifyContent = "center";
+      closeBtn.style.background = "#f1f5f9";
+      closeBtn.style.borderRadius = "50%";
+      closeBtn.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
+      closeBtn.style.transition = "all 0.2s";
       itemDetail.appendChild(closeBtn);
+
+      closeBtn.addEventListener("mouseenter", () => {
+        closeBtn.style.background = "#ef4444";
+        closeBtn.style.color = "white";
+        closeBtn.style.transform = "rotate(90deg)";
+      });
+      
+      closeBtn.addEventListener("mouseleave", () => {
+        closeBtn.style.background = "#f1f5f9";
+        closeBtn.style.color = "#333";
+        closeBtn.style.transform = "rotate(0deg)";
+      });
 
       closeBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (captureInProgress) return alert("Finish image capture first.");
+        if (captureInProgress) return alert("Finish image capture first. / Maliza kupiga picha kwanza.");
         hideItemDetail();
       });
     }
@@ -799,6 +827,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const startIndex = existing.length; // 0 or 1
     const neededCount = 2 - startIndex;
 
+    showStatus(`📸 ${neededCount} more photo(s) needed / picha ${neededCount} zaidi zinahitajika`);
+
     // BEST: open camera stream modal (seamless) - FULLSCREEN VERSION
     if (navigator.mediaDevices?.getUserMedia) {
       const result = await captureMissingWithStreamModal(existing, startIndex, neededCount);
@@ -810,7 +840,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Upload captured files
         for (let i = 0; i < result.files.length; i++) {
           const slot = startIndex + i;
-          showStatus(`Uploading image ${slot + 1} of 2...`);
+          showStatus(`📤 Uploading image ${slot + 1} of 2... / Inapakia picha ${slot + 1} kati ya 2...`);
           const url = await uploadToCloudinary(result.files[i]);
           finalImages[slot] = url;
           setPreviewImageSlot(slot, url);
@@ -837,7 +867,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (currentItem?.data) currentItem.data.images = finalImages;
 
         clearCaptureActions();
-        showStatus("✅ Both images saved.");
+        showStatus("✅ Both images saved / Picha zote zimehifadhiwa");
         setTimeout(() => clearStatus(), 1200);
         renderItemMeta(currentItem?.data || data);
         return true;
@@ -853,7 +883,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     for (let i = 0; i < fallback.files.length; i++) {
       const slot = startIndex + i;
-      showStatus(`Uploading image ${slot + 1} of 2...`);
+      showStatus(`📤 Uploading image ${slot + 1} of 2... / Inapakia picha ${slot + 1} kati ya 2...`);
       const url = await uploadToCloudinary(fallback.files[i]);
       finalImages[slot] = url;
       setPreviewImageSlot(slot, url);
@@ -880,7 +910,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (currentItem?.data) currentItem.data.images = finalImages;
 
     clearCaptureActions();
-    showStatus("✅ Both images saved.");
+    showStatus("✅ Both images saved / Picha zote zimehifadhiwa");
     setTimeout(() => clearStatus(), 1200);
     renderItemMeta(currentItem?.data || data);
     return true;
@@ -892,7 +922,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       captureInProgress = true;
-      showStatus("Opening camera...");
+      showStatus("Opening camera... / Kufungua kamera...");
 
       stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
@@ -904,8 +934,8 @@ document.addEventListener("DOMContentLoaded", () => {
       backdrop.innerHTML = `
         <div class="sk-cam-sheet" role="dialog" aria-modal="true">
           <div class="sk-cam-topbar">
-            <div class="sk-cam-title" id="sk-title">Capture item photos</div>
-            <button class="sk-btn sk-btn-danger" id="sk-cancel">Cancel</button>
+            <div class="sk-cam-title" id="sk-title">Capture item photos / Piga picha za bidhaa</div>
+            <button class="sk-btn sk-btn-danger" id="sk-cancel">Cancel / Ghairi</button>
           </div>
 
           <div class="sk-cam-view">
@@ -923,11 +953,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
           <div class="sk-cam-bottombar">
             <div style="display:flex; gap:10px;">
-              <button class="sk-btn sk-btn-secondary" id="sk-retake" style="display:none;">Retake</button>
-              <button class="sk-btn sk-btn-secondary" id="sk-reset" style="display:none;">Reset</button>
+              <button class="sk-btn sk-btn-secondary" id="sk-retake" style="display:none;">Retake / Piga Tena</button>
+              <button class="sk-btn sk-btn-secondary" id="sk-reset" style="display:none;">Reset / Anzisha Upya</button>
             </div>
 
-            <button class="sk-shutter" id="sk-shot" aria-label="Capture photo"></button>
+            <button class="sk-shutter" id="sk-shot" aria-label="Capture photo / Piga picha"></button>
 
             <div style="width:110px;"></div>
           </div>
@@ -969,8 +999,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const updateUI = () => {
         const absSlot = startIndex + step;
-        titleEl.textContent = `Capture photo ${absSlot + 1} of 2`;
-        statusEl.textContent = `Take photo ${absSlot + 1} now`;
+        titleEl.textContent = `Capture photo ${absSlot + 1} of 2 / Piga picha ${absSlot + 1} kati ya 2`;
+        statusEl.textContent = `Take photo ${absSlot + 1} now / Piga picha ${absSlot + 1} sasa`;
 
         btnRetake.style.display = (step > 0) ? "inline-block" : "none";
         btnReset.style.display = (step > 1) ? "inline-block" : "none";
@@ -1002,7 +1032,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           // Reset main UI slot if it was missing slot
           if ((absSlot === 0 && !existingUrls[0]) || (absSlot === 1 && !existingUrls[1])) {
-            setPlaceholderMessage(absSlot, "No image");
+            setPlaceholderMessage(absSlot, "No image / Hakuna picha");
           }
         }
         step = 0;
@@ -1024,7 +1054,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (absSlot === 1 && !existingUrls[1]) t2.textContent = "2";
 
         if ((absSlot === 0 && !existingUrls[0]) || (absSlot === 1 && !existingUrls[1])) {
-          setPlaceholderMessage(absSlot, "No image");
+          setPlaceholderMessage(absSlot, "No image / Hakuna picha");
         }
 
         step = i;
@@ -1061,7 +1091,7 @@ document.addEventListener("DOMContentLoaded", () => {
         updateUI();
       }
 
-      statusEl.textContent = "Captured required photos. Closing camera...";
+      statusEl.textContent = "Captured required photos. Closing camera... / Picha zimekamilika. Kufunga kamera...";
       return cleanupAndReturn({ cancelled: false, files: files.filter(Boolean) });
 
     } catch (e) {
@@ -1083,27 +1113,26 @@ document.addEventListener("DOMContentLoaded", () => {
       backdrop.className = "sk-cam-backdrop";
       backdrop.innerHTML = `
         <div class="sk-cam-sheet" role="dialog" aria-modal="true">
-          <div class="sk-cam-header">
-            <div>Capture item photos (fallback)</div>
-            <button class="sk-btn sk-btn-danger" id="pk-cancel">Cancel</button>
+          <div class="sk-cam-header" style="padding:16px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="color:white; font-weight:bold;">Capture item photos (fallback) / Piga picha (njia mbadala)</div>
+            <button style="background:#c0392b; color:white; border:none; border-radius:10px; padding:8px 16px; cursor:pointer;" id="pk-cancel">Cancel / Ghairi</button>
           </div>
-          <div class="sk-cam-body">
+          <div style="padding:16px;">
             <div style="margin-bottom:10px; color:#ddd; font-size:13px;">
               Your browser blocked continuous camera mode. Use this fallback:
-              click the button for each photo.
+              click the button for each photo. / Kivinjari chako kimezuia kamera. Tumia njia hii:
+              bonyeza kitufe kwa kila picha.
             </div>
 
-            <div class="sk-cam-row">
-              <div class="sk-cam-thumbs">
-                <div class="sk-cam-thumb" id="pk-t1">${existingUrls[0] ? `<img src="${existingUrls[0]}">` : "1"}</div>
-                <div class="sk-cam-thumb" id="pk-t2">${existingUrls[1] ? `<img src="${existingUrls[1]}">` : "2"}</div>
-              </div>
+            <div style="display:flex; align-items:center; gap:20px; margin-bottom:16px;">
               <div style="display:flex; gap:10px;">
-                <button class="sk-btn sk-btn-primary" id="pk-next">Capture next</button>
+                <div style="width:56px; height:56px; border-radius:10px; background:rgba(255,255,255,0.1); border:1px solid #444; display:flex; align-items:center; justify-content:center; overflow:hidden;" id="pk-t1">${existingUrls[0] ? `<img src="${existingUrls[0]}" style="width:100%; height:100%; object-fit:cover;">` : "1"}</div>
+                <div style="width:56px; height:56px; border-radius:10px; background:rgba(255,255,255,0.1); border:1px solid #444; display:flex; align-items:center; justify-content:center; overflow:hidden;" id="pk-t2">${existingUrls[1] ? `<img src="${existingUrls[1]}" style="width:100%; height:100%; object-fit:cover;">` : "2"}</div>
               </div>
+              <button style="background:#4f46e5; color:white; border:none; border-radius:10px; padding:8px 16px; cursor:pointer;" id="pk-next">Capture next / Piga inayofuata</button>
             </div>
 
-            <div class="sk-cam-status" id="pk-status"></div>
+            <div style="color:#ddd; font-size:13px;" id="pk-status"></div>
           </div>
         </div>
       `;
@@ -1120,13 +1149,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const setThumb = (absSlot, url) => {
         const target = absSlot === 0 ? t1 : t2;
-        target.innerHTML = `<img src="${url}" alt="Preview ${absSlot + 1}">`;
+        target.innerHTML = `<img src="${url}" style="width:100%; height:100%; object-fit:cover;" alt="Preview ${absSlot + 1}">`;
       };
 
       const updateStatus = () => {
         const absSlot = startIndex + step;
-        statusEl.textContent = `Click to capture photo ${absSlot + 1} of 2`;
-        btnNext.textContent = `Capture photo ${absSlot + 1}`;
+        statusEl.textContent = `Click to capture photo ${absSlot + 1} of 2 / Bonyeza kupiga picha ${absSlot + 1} kati ya 2`;
+        btnNext.textContent = `Capture photo ${absSlot + 1} / Piga picha ${absSlot + 1}`;
       };
 
       const cleanup = (result) => {
@@ -1148,7 +1177,7 @@ document.addEventListener("DOMContentLoaded", () => {
         btnNext.disabled = false;
 
         if (!file) {
-          const retry = confirm(`Photo ${absSlot + 1} is required.\n\nTry again?`);
+          const retry = confirm(`Photo ${absSlot + 1} is required. / Picha ${absSlot + 1} inahitajika.\n\nTry again? / Jaribu tena?`);
           if (!retry) return cleanup({ cancelled: true });
           return;
         }
@@ -1161,7 +1190,7 @@ document.addEventListener("DOMContentLoaded", () => {
         step++;
 
         if (step >= neededCount) {
-          statusEl.textContent = "Captured required photos. Closing...";
+          statusEl.textContent = "Captured required photos. Closing... / Picha zimekamilika. Kufunga...";
           return cleanup({ cancelled: false, files });
         }
 
@@ -1179,12 +1208,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!actions) return;
 
     actions.innerHTML = `
-      <div style="font-weight:600; margin-bottom:10px;">
-        Two item photos are required before you can continue.
+      <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 16px; margin: 20px 0; border-radius: 4px;">
+        <div style="font-weight:600; margin-bottom:10px; color: #856404;">
+          ⚠️ Two item photos are required / Picha mbili za bidhaa zinahitajika
+        </div>
+        <button id="capture-required" 
+                style="background: #0077cc; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-size: 16px; cursor: pointer; width: 100%;">
+          📸 Capture Required Photos / Piga Picha Zinazohitajika
+        </button>
       </div>
-      <button id="capture-required" style="padding:10px 14px; cursor:pointer;">
-        Capture Required Photos
-      </button>
     `;
 
     const btn = actions.querySelector("#capture-required");
@@ -1210,7 +1242,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // =========================================================
-  // ensurePrices with baseUnit + dataset sync
+  // ensurePrices with baseUnit + dataset sync (BILINGUAL)
   // =========================================================
   async function ensurePrices(itemRef, data) {
     if (!canManageStock()) return;
@@ -1257,12 +1289,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // =========================================================
-  // addStockToItem with batch tracking + SELL UNIT PRICING
+  // addStockToItem with batch tracking + SELL UNIT PRICING (BILINGUAL)
   // =========================================================
   async function addStockToItem() {
     if (!currentItem) return;
     if (!canManageStock()) {
-      alert("Access denied: You don't have permission to add stock.");
+      alert("Access denied: You don't have permission to add stock. / Huna ruhusa ya kuongeza stock.");
       return;
     }
 
@@ -1271,14 +1303,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const baseUnit = itemData.baseUnit || "unit";
 
     const quantity = parseFloat(prompt(
-      `How many ${baseUnit} of "${currentItem.name}" to add?\n\n` +
-      `Example: If adding 3 bags, enter "3"\n` +
-      `Current stock: ${itemData.stock || 0} ${baseUnit}`,
+      `How many ${baseUnit} of "${currentItem.name}" to add? / Unaongeza ${baseUnit} ngapi za "${currentItem.name}"?\n\n` +
+      `Example / Mfano: If adding 3 bags, enter "3" / Ukiongeza gunia 3, andika "3"\n` +
+      `Current stock / Stock ya sasa: ${itemData.stock || 0} ${baseUnit}`,
       "1"
     ));
 
     if (isNaN(quantity) || quantity <= 0) {
-      alert("Please enter a valid number");
+      alert("Please enter a valid number / Tafadhali weka namba sahihi");
       return;
     }
 
@@ -1290,7 +1322,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const priceResult = await getBatchPrices(itemData, isFirstBatch);
     if (!priceResult) {
-      alert("Stock addition cancelled.");
+      alert("Stock addition cancelled. / Kuongeza stock kumekataliwa.");
       return;
     }
 
@@ -1374,23 +1406,30 @@ document.addEventListener("DOMContentLoaded", () => {
       if (priceResult.updateSell) currentItem.data.sellPrice = priceResult.sellPrice;
       if (!currentItem.data.baseUnit) currentItem.data.baseUnit = baseUnit;
 
-      let message = `✅ Added ${quantity} ${baseUnit}`;
-      if (batches.length > 0) {
-        message += `\n\nThis is batch #${batches.length + 1}`;
+      // Add flash animation to stock display
+      const stockElement = document.querySelector('.stock-success-flash');
+      if (stockElement) {
+        stockElement.classList.add('stock-success-flash');
+        setTimeout(() => stockElement.classList.remove('stock-success-flash'), 500);
       }
-      message += `\n\nTotal stock now: ${currentItem.data.stock} ${baseUnit}`;
+
+      let message = `✅ Added ${quantity} ${baseUnit} / Umeongeza ${quantity} ${baseUnit}`;
+      if (batches.length > 0) {
+        message += `\n\nThis is batch #${batches.length + 1} / Hii ni batch #${batches.length + 1}`;
+      }
+      message += `\n\nTotal stock now / Jumla ya stock sasa: ${currentItem.data.stock} ${baseUnit}`;
       alert(message);
 
       renderItemMeta(currentItem.data);
 
     } catch (error) {
       console.error("❌ Error adding stock:", error);
-      alert("Failed to add stock. Please try again.");
+      alert("Failed to add stock. Please try again. / Imeshindwa kuongeza stock. Tafadhali jaribu tena.");
     }
   }
 
   // =========================================================
-  // renderItemMeta
+  // renderItemMeta - RESTORED ORIGINAL VISUAL CHARM + BILINGUAL + KSH CURRENCY
   // =========================================================
   function renderItemMeta(data = {}) {
     const imgs = data.images || [];
@@ -1404,24 +1443,26 @@ document.addEventListener("DOMContentLoaded", () => {
     if (itemNameEl) {
       if (editMode) {
         itemNameEl.innerHTML = `
-          <input type="text" id="item-name-input" value="${data.name || ""}"
-                 style="font-size: 1.5rem; padding: 5px; width: 80%; border: 1px solid #ccc; border-radius: 4px;">
-          <span class="pencil" style="margin-left: 10px; color: #666;">✎</span>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <input type="text" id="item-name-input" value="${data.name || ""}"
+                   style="font-size: 1.5rem; padding: 8px 12px; width: 80%; border: 2px solid #ccc; border-radius: 8px; font-weight: bold;">
+            <span style="color: #666; cursor: pointer; font-size: 1.2rem;">✎</span>
+          </div>
         `;
       } else {
-        itemNameEl.textContent = data.name || "";
+        itemNameEl.innerHTML = `<span style="font-size: 1.8rem; font-weight: bold; color: #1e293b;">${data.name || ""}</span>`;
       }
     }
 
     const imgHtml = [0, 1].map(i => {
-      if (!imgs[i]) return `<div class="image-slot placeholder">No image</div>`;
+      if (!imgs[i]) return `<div class="image-slot placeholder">${i === 0 ? 'Front' : 'Back'} / ${i === 0 ? 'Mbele' : 'Nyuma'}</div>`;
       return `
         <div class="image-slot">
           <img src="${imgs[i]}" class="item-thumb">
           ${editMode ? `
             <div class="image-edit-overlay">
-              <span class="pencil">✎</span>
-              <button class="retake-btn" data-index="${i}">Retake</button>
+              <span class="pencil" style="color: white;">✎</span>
+              <button class="retake-btn" data-index="${i}" style="background: #ff6b6b; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Retake / Piga Tena</button>
             </div>
           ` : ""}
         </div>
@@ -1431,70 +1472,83 @@ document.addEventListener("DOMContentLoaded", () => {
     let pricesHtml;
     if (editMode) {
       pricesHtml = `
-        <div class="item-prices">
-          <div style="margin-bottom: 8px; display: flex; align-items: center;">
-            <span class="pencil" style="margin-right: 8px; color: #666;">✎</span>
-            <label style="margin-right: 8px;">Buy Price (per ${baseUnit}):</label>
-            <input type="number" id="buy-price-input" value="${data.buyPrice || ""}"
-                   step="0.01" min="0" style="padding: 4px; width: 100px; border: 1px solid #ccc; border-radius: 4px;">
-          </div>
-          <div style="display: flex; align-items: center;">
-            <span class="pencil" style="margin-right: 8px; color: #666;">✎</span>
-            <label style="margin-right: 8px;">Sell Price (per ${baseUnit}):</label>
-            <input type="number" id="sell-price-input" value="${data.sellPrice || ""}"
-                   step="0.01" min="0" style="padding: 4px; width: 100px; border: 1px solid #ccc; border-radius: 4px;">
+        <div style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 12px; border: 1px solid #e9ecef;">
+          <div style="display: flex; gap: 20px; align-items: center;">
+            <span class="pencil" style="color: #666;">✎</span>
+            <div style="flex: 1;">
+              <label style="display: block; margin-bottom: 5px; font-weight: 500;">Buy Price / Bei ya Kununua (per ${baseUnit})</label>
+              <input type="number" id="buy-price-input" value="${data.buyPrice || ""}"
+                     step="0.01" min="0" style="padding: 8px; width: 100%; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+            <div style="flex: 1;">
+              <label style="display: block; margin-bottom: 5px; font-weight: 500;">Sell Price / Bei ya Kuuza (per ${baseUnit})</label>
+              <input type="number" id="sell-price-input" value="${data.sellPrice || ""}"
+                     step="0.01" min="0" style="padding: 8px; width: 100%; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
           </div>
         </div>
       `;
     } else {
       pricesHtml = `
-        <div class="item-prices">
-          <p>Buy Price: ${data.buyPrice ? `$${data.buyPrice} per ${baseUnit}` : "-"}</p>
-          <p>Sell Price: ${data.sellPrice ? `$${data.sellPrice} per ${baseUnit}` : "-"}</p>
+        <div style="margin: 20px 0; padding: 15px 20px; background: linear-gradient(135deg, #667eea20, #764ba220); border-radius: 50px; display: inline-block; border: 1px solid #667eea40;">
+          <span style="margin-right: 20px;"><span class="tiny-graph"></span> Buy / Nunua: <strong style="color: #2563eb;">KSh ${data.buyPrice || 0}</strong> / ${baseUnit}</span>
+          <span><span class="tiny-graph" style="background: #10b981;"></span> Sell / Uza: <strong style="color: #059669;">KSh ${data.sellPrice || 0}</strong> / ${baseUnit}</span>
         </div>
       `;
     }
 
     const batchDisplay = batches.length > 0 ? `
-      <div style="margin: 15px 0; padding: 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <div style="font-size: 14px; font-weight: 600; color: #495057;">
-            📦 Stock Batches (${batches.length})
+      <div style="margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 12px; border: 1px solid #dee2e6;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <div style="font-size: 16px; font-weight: 600; color: #495057;">
+            <span class="section-icon">📦</span> Stock Batches / Makundi ya Stock (${batches.length})
           </div>
-          <div style="font-size: 12px; color: #6c757d;">
-            Each batch tracks price when added
+          <div style="font-size: 12px; color: #6c757d; display: flex; align-items: center;">
+            <span class="tiny-graph"></span> Each batch tracks price when added
           </div>
         </div>
-        <div style="max-height: 100px; overflow-y: auto;">
-          ${batches.slice(-2).reverse().map(batch => `
-            <div style="padding: 8px; margin: 4px 0; background: white; border-radius: 6px; border-left: 3px solid #28a745;">
+        <div style="max-height: 150px; overflow-y: auto; padding-right: 5px;">
+          ${batches.slice(-3).reverse().map((batch, idx) => `
+            <div class="batch-item ${idx > 0 ? 'old-batch' : ''}" style="padding: 10px; margin: 8px 0; background: white; border-radius: 8px; border-left: 4px solid ${idx === 0 ? '#28a745' : '#f59e0b'}; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
               <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 12px; font-weight: 500;">${batch.date || ''}</span>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="background: ${idx === 0 ? '#28a74520' : '#f59e0b20'}; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; color: ${idx === 0 ? '#28a745' : '#f59e0b'};">
+                    ${idx === 0 ? 'NEW / MPYA' : `Batch ${batches.length - idx}`}
+                  </span>
+                  <span style="font-size: 12px; color: #6c757d;">${batch.date || ''}</span>
+                </div>
                 <span style="font-weight: bold; color: #28a745;">+${batch.quantity} ${batch.unit}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; font-size: 11px; color: #6c757d; margin-top: 2px;">
-                <span>Buy: $${batch.buyPrice || 0}/${batch.unit}</span>
-                <span>Sell: $${batch.sellPrice || 0}/${batch.unit}</span>
+              <div style="display: flex; gap: 20px; margin-top: 8px; font-size: 12px; color: #6c757d;">
+                <span>💰 Buy / Nunua: KSh ${batch.buyPrice || 0}</span>
+                <span>💵 Sell / Uza: KSh ${batch.sellPrice || 0}</span>
               </div>
             </div>
           `).join('')}
+          ${batches.length > 3 ? `
+            <div style="text-align: center; font-size: 12px; color: #adb5bd; margin-top: 10px;">
+              +${batches.length - 3} more batches / makundi mengine
+            </div>
+          ` : ''}
         </div>
       </div>
     ` : '';
 
     const stockHtml = `
-      <div style="margin: 20px 0; padding: 15px; background: #f0f8ff; border: 2px solid #0077cc; border-radius: 10px;">
+      <div style="margin: 25px 0; padding: 20px; background: linear-gradient(135deg, #0066cc, #004999); border-radius: 16px; box-shadow: 0 10px 25px rgba(0,102,204,0.3);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
           <div>
-            <div style="font-size: 16px; font-weight: bold; color: #0055aa;">📦 STOCK TRACKING</div>
-            <div style="font-size: 32px; font-weight: bold; color: #0077cc;">
-              ${totalStock}
-              <span style="font-size: 16px; color: #666; margin-left: 5px;">${baseUnit}</span>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+              <span style="font-size: 24px;">📊</span>
+              <span style="color: white; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9;">STOCK TRACKING / UFUATILIAJI WA STOCK</span>
+            </div>
+            <div style="display: flex; align-items: baseline;">
+              <span style="font-size: 48px; font-weight: bold; color: white; line-height: 1;">${totalStock}</span>
+              <span style="font-size: 20px; color: rgba(255,255,255,0.8); margin-left: 10px;">${baseUnit}</span>
             </div>
             ${transactions.length > 0 ? `
-              <div style="font-size: 12px; color: #888; margin-top: 5px;">
-                Based on ${transactions.length} transaction${transactions.length === 1 ? "" : "s"}
-                ${batches.length > 0 ? ` • ${batches.length} batch${batches.length === 1 ? "" : "es"}` : ''}
+              <div style="font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 5px;">
+                Based on ${transactions.length} transaction${transactions.length === 1 ? '' : 's'} / shughuli ${batches.length > 0 ? `• ${batches.length} batch${batches.length === 1 ? '' : 'es'} / makundi` : ''}
               </div>
             ` : ''}
           </div>
@@ -1502,49 +1556,52 @@ document.addEventListener("DOMContentLoaded", () => {
           <button id="add-stock-btn"
                   ${canStock ? "" : "disabled"}
                   style="
-                    padding: 10px 20px;
-                    background: ${canStock ? "linear-gradient(135deg, #0077cc, #0055aa)" : "#95a5a6"};
-                    color: white;
+                    padding: 12px 24px;
+                    background: ${canStock ? "white" : "#95a5a6"};
+                    color: ${canStock ? "#0066cc" : "white"};
                     border: none;
-                    border-radius: 6px;
+                    border-radius: 50px;
                     font-size: 16px;
                     cursor: ${canStock ? "pointer" : "not-allowed"};
                     font-weight: bold;
-                    opacity: ${canStock ? "1" : "0.7"};
-                  ">
-            ➕ Add Stock
+                    box-shadow: ${canStock ? "0 4px 10px rgba(0,0,0,0.2)" : "none"};
+                    transition: all 0.2s;
+                  "
+                  onmouseover="this.style.transform='${canStock ? 'scale(1.05)' : 'none'}'"
+                  onmouseout="this.style.transform='none'">
+            ➕ Add Stock / Ongeza Stock
           </button>
         </div>
 
         ${batchDisplay}
 
+        <div class="section-divider" style="height: 1px; background: linear-gradient(to right, transparent, rgba(255,255,255,0.3), transparent); margin: 20px 0;"></div>
+
         ${transactions.length > 0 ? `
-          <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #cce7ff;">
-            <div style="font-size: 14px; font-weight: bold; color: #0055aa; margin-bottom: 8px;">
-              Recent Stock Movements:
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 15px;">
+              <span style="font-size: 16px;">📋</span>
+              <span style="color: white; font-size: 14px; font-weight: 500;">Recent Movements / Shughuli za Karibuni</span>
             </div>
-            <div style="max-height: 150px; overflow-y: auto;">
+            <div style="max-height: 200px; overflow-y: auto; padding-right: 5px;">
               ${lastThree.map(t => {
                 const isSale = t.type === "sale" || Number(t.quantity) < 0;
-                const label = isSale ? "Sold by" : "Added by";
+                const label = isSale ? "Sold by / Imeuzwa na" : "Added by / Imeongezwa na";
                 const who = t?.performedBy?.name || t?.performedBy?.email || t.addedBy || "Unknown";
                 const qtyText = Number(t.quantity) > 0 ? `+${t.quantity}` : `${t.quantity}`;
-                const qtyColor = isSale ? "#cc0000" : "#009900";
-                const unit = t.unit || baseUnit;
+                const qtyColor = isSale ? "#dc2626" : "#10b981";
+                const bgColor = isSale ? "#fee2e2" : "#e6f7e6";
 
                 return `
-                  <div style="padding: 10px; margin: 5px 0; background: white; border-radius: 6px;
-                              border-left: 4px solid ${isSale ? "#cc0000" : "#0077cc"}; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                    <div style="display: flex; justify-content: space-between;">
+                  <div style="padding: 12px; margin: 8px 0; background: ${bgColor}; border-radius: 10px; border-left: 4px solid ${qtyColor};">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                       <span style="color: #333; font-weight: 500;">${t.date || ""}</span>
-                      <span style="font-weight: bold; color: ${qtyColor}; font-size: 16px;">
-                        ${qtyText} ${unit}
-                      </span>
+                      <span style="font-weight: bold; color: ${qtyColor};">${qtyText} ${t.unit || baseUnit}</span>
                     </div>
-                    <div style="font-size: 12px; color: #666; margin-top: 4px;">
+                    <div style="font-size: 12px; color: #666;">
                       ${label}: ${who}
-                      ${t.buyPrice ? ` • Buy: $${t.buyPrice}/${unit}` : ''}
-                      ${t.sellPrice ? ` • Sell: $${t.sellPrice}/${unit}` : ''}
+                      ${t.buyPrice ? ` • Buy / Nunua: KSh ${t.buyPrice}` : ''}
+                      ${t.sellPrice ? ` • Sell / Uza: KSh ${t.sellPrice}` : ''}
                     </div>
                   </div>
                 `;
@@ -1552,8 +1609,8 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
           </div>
         ` : `
-          <div style="margin-top: 15px; padding: 20px; text-align: center; color: #888; font-style: italic; background: white; border-radius: 6px;">
-            No stock recorded yet.
+          <div style="padding: 30px; text-align: center; background: rgba(255,255,255,0.1); border-radius: 12px;">
+            <p style="color: white; font-style: italic; margin: 0;">No stock recorded yet. / Hakuna stock bado.</p>
           </div>
         `}
       </div>
@@ -1564,63 +1621,58 @@ document.addEventListener("DOMContentLoaded", () => {
     const bufferStatus = getBufferStatus(totalStock, alertThreshold);
 
     const alertHtml = `
-      <div class="alert-slider-container ${isAlertActive ? "alert-active" : ""}">
-        <div class="alert-slider-header">
-          <div class="alert-title ${isAlertActive ? "alert-active" : ""}">
-            ${isAlertActive ? "⚠️ LOW STOCK ALERT" : "📊 STOCK ALERTS"}
+      <div class="alert-slider-container ${isAlertActive ? "alert-active" : ""}" style="margin: 20px 0; padding: 20px; background: ${isAlertActive ? '#fff5f5' : '#f0fff0'}; border: 2px solid ${isAlertActive ? '#ff6b6b' : '#2ed573'}; border-radius: 12px;">
+        <div class="alert-slider-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <div style="font-size: 16px; font-weight: bold; color: ${isAlertActive ? '#ff6b6b' : '#2ed573'}; display: flex; align-items: center; gap: 8px;">
+            <span class="section-icon">${isAlertActive ? '⚠️' : '📊'}</span>
+            ${isAlertActive ? "LOW STOCK ALERT / ARIFA YA STOCK KIDOGO" : "STOCK ALERTS / ARIFA ZA STOCK"}
           </div>
-          <div class="alert-status ${isAlertActive ? "alert-active" : ""}">
-            ${isAlertActive ? "ALERT ACTIVE" : "MONITORING"}
+          <div style="font-size: 12px; padding: 4px 12px; border-radius: 20px; background: ${isAlertActive ? '#ff6b6b20' : '#2ed57320'}; color: ${isAlertActive ? '#ff6b6b' : '#2ed573'}; font-weight: 500;">
+            ${isAlertActive ? "ACTIVE / IMEWASHWA" : "MONITORING / INAFUATILIWA"}
           </div>
         </div>
 
-        <div style="margin: 10px 0;">
-          <div style="font-size: 14px; color: #666;">
-            Alert when stock reaches: <span style="font-weight: bold; color: #333;">${alertThreshold}</span> ${baseUnit}
+        <div style="background: white; padding: 15px; border-radius: 10px; margin: 15px 0;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #666;">Alert when stock reaches / Arifa wakati stock inafikia:</span>
+            <span style="font-weight: bold; font-size: 18px;">${alertThreshold} ${baseUnit}</span>
           </div>
           ${isAlertActive ? `
-            <div style="font-size: 12px; color: #ff6b6b; margin-top: 4px; font-weight: bold;">
-              ⚠️ Alert Active: Stock is at ${totalStock} ${baseUnit}!
+            <div style="margin-top: 10px; padding: 10px; background: #fee2e2; color: #dc2626; border-radius: 8px; font-weight: bold; display: flex; align-items: center; gap: 8px;">
+              <span>⚠️</span>
+              <span>Alert Active: Stock is at ${totalStock} ${baseUnit}! / Arifa Imewashwa: Stock iko ${totalStock} ${baseUnit}!</span>
             </div>
-          ` : ""}
+          ` : ''}
         </div>
 
-        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(0,0,0,0.1);">
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #dee2e6;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div class="stock-buffer ${bufferStatus.class}" style="font-size: 14px;">
-              <span style="font-weight: 500;">Buffer:</span>
-              <span style="font-weight: bold; margin-left: 5px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-weight: 500;">Buffer / Hifadhi:</span>
+              <span style="font-weight: bold; color: ${bufferStatus.class === 'healthy' ? '#10b981' : (bufferStatus.class === 'warning' ? '#f59e0b' : '#ef4444')};">
                 ${totalStock - alertThreshold} ${baseUnit}
               </span>
-              <span style="margin-left: 8px; font-size: 12px;">(${bufferStatus.text})</span>
+              <span class="stock-badge ${bufferStatus.class}" style="font-size: 11px;">${bufferStatus.text}</span>
             </div>
 
             ${editMode ? `
-              <button id="configure-alert-btn" style="
-                padding: 8px 16px;
-                background: linear-gradient(135deg, #667eea, #764ba2);
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-size: 14px;
-                cursor: pointer;
-                font-weight: 500;
-              ">
-                Configure Alert
+              <button id="configure-alert-btn" 
+                      style="padding: 8px 16px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 5px;">
+                ⚙️ Configure / Sanidi
               </button>
             ` : `
               <div style="padding: 8px 12px; background: #f8f9fa; border-radius: 6px; color: #666; font-size: 12px;">
-                ${canStock ? "Edit mode to change" : "No permission to change"}
+                ${canStock ? "Edit mode to change / Hariri kubadilisha" : "No permission / Huna ruhusa"}
               </div>
             `}
           </div>
         </div>
 
         ${editMode ? `
-          <div id="alert-config-panel" class="alert-config-panel">
-            <div style="margin-bottom: 15px;">
-              <div style="font-weight: 600; color: #333; margin-bottom: 8px;">
-                Set Low Stock Alert Level
+          <div id="alert-config-panel" class="alert-config-panel" style="display: none; margin-top: 20px; padding: 20px; background: white; border-radius: 8px; border: 1px solid #e9ecef;">
+            <div style="margin-bottom: 20px;">
+              <div style="font-weight: 600; color: #333; margin-bottom: 10px;">
+                Set Low Stock Alert Level / Weka Kiwango cha Arifa ya Stock
               </div>
 
               <input type="range"
@@ -1629,33 +1681,39 @@ document.addEventListener("DOMContentLoaded", () => {
                      max="50"
                      value="${alertThreshold}"
                      step="1"
-                     class="alert-slider">
+                     style="width: 100%; height: 8px; -webkit-appearance: none; background: linear-gradient(to right, #2ed573, #ff6b6b); border-radius: 4px; outline: none; margin: 10px 0;">
 
-              <div id="alert-value-display" class="alert-value-display">${alertThreshold}</div>
+              <div id="alert-value-display" style="font-size: 24px; font-weight: bold; color: #667eea; text-align: center; margin: 15px 0;">${alertThreshold}</div>
 
-              <div class="alert-labels">
-                <span>0 (No Alert)</span>
-                <span>Critical: 5</span>
-                <span>Warning: 10</span>
-                <span>Safe: 25</span>
+              <div style="display: flex; justify-content: space-between; font-size: 12px; color: #666;">
+                <span>0 (No Alert / Hakuna)</span>
+                <span>Critical / Muhimu: 5</span>
+                <span>Warning / Tahadhari: 10</span>
+                <span>Safe / Salama: 25</span>
                 <span>50+</span>
               </div>
             </div>
 
-            <div style="margin-bottom: 15px;">
+            <div style="margin-bottom: 20px;">
               <label style="display: block; margin-bottom: 8px; color: #666; font-size: 14px;">
-                Alert Description (Optional)
+                Alert Description / Maelezo ya Arifa (Optional)
               </label>
               <input type="text"
                      id="alert-description"
-                     placeholder="e.g., 'Restock immediately'"
+                     placeholder="e.g., 'Restock immediately' / mfano: 'Jaza stock mara moja'"
                      value="${data.alertDescription || ""}"
-                     class="alert-description-input">
+                     style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
             </div>
 
-            <div class="alert-buttons">
-              <button id="save-alert-btn" class="alert-save-btn">Save Alert</button>
-              <button id="cancel-alert-btn" class="alert-cancel-btn">Cancel</button>
+            <div style="display: flex; gap: 10px;">
+              <button id="save-alert-btn" 
+                      style="flex: 1; padding: 12px; background: linear-gradient(135deg, #2ed573, #1dd1a1); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                Save / Hifadhi
+              </button>
+              <button id="cancel-alert-btn" 
+                      style="flex: 1; padding: 12px; background: #f8f9fa; color: #666; border: 2px solid #e9ecef; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                Cancel / Ghairi
+              </button>
             </div>
           </div>
         ` : ""}
@@ -1668,7 +1726,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ${stockHtml}
       ${alertHtml}
       <div class="capture-actions"></div>
-      <div class="capture-status"></div>
+      <div class="capture-status" style="margin-top: 10px; color: #666; font-style: italic; text-align: center;"></div>
     `;
 
     const addStockBtn = itemMeta.querySelector("#add-stock-btn");
@@ -1721,7 +1779,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const actor = getActor();
         const index = Number(btn.dataset.index);
-        showStatus(`Retaking image ${index + 1}…`);
+        showStatus(`Retaking image ${index + 1}… / Kupiga picha ${index + 1} tena…`);
 
         const file = await promptCameraCapture();
         if (!file) return clearStatus();
@@ -1746,7 +1804,8 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         sendImageForEmbedding(url, index);
-        clearStatus();
+        showStatus("✅ Image updated / Picha imesasishwa");
+        setTimeout(() => clearStatus(), 1500);
         renderItemMeta(currentItem.data);
 
         try { URL.revokeObjectURL(preview); } catch (_) {}
@@ -1842,7 +1901,7 @@ document.addEventListener("DOMContentLoaded", () => {
     currentItem = null;
     editMode = false;
 
-    if (editToggleBtn) editToggleBtn.textContent = "Edit";
+    if (editToggleBtn) editToggleBtn.textContent = "Edit / Hariri";
     syncEditButtonUI();
 
     const closeBtn = document.getElementById("item-detail-close-btn");

@@ -1,5 +1,6 @@
 // staffManager.js - Staff Management System
 // Handles adding, viewing, and managing staff members within each shop
+// UPDATED: Bilingual (English/Swahili) + Responsive design + Text overflow fixes
 
 import { db } from "./firebase-config.js";
 import { 
@@ -23,29 +24,37 @@ let currentShopId = null;
 let staffOverlay = null;
 let unsubscribeStaffListener = null;
 
-// Access level definitions
+// Access level definitions (Bilingual)
 const ACCESS_LEVELS = {
   1: { 
     name: "Basic", 
+    nameSwahili: "Msingi",
     description: "Can only sell",
+    descriptionSwahili: "Anaweza kuuza tu",
     color: "#4CAF50",
     permissions: ["sell"]
   },
   2: { 
     name: "Intermediate", 
+    nameSwahili: "Kati",
     description: "Can sell & manage stock",
+    descriptionSwahili: "Anaweza kuuza na kudhibiti stock",
     color: "#2196F3", 
     permissions: ["sell", "manage_stock"]
   },
   3: { 
     name: "Advanced", 
+    nameSwahili: "Juu",
     description: "Can sell, manage stock & view reports",
+    descriptionSwahili: "Anaweza kuuza, kudhibiti stock na kuona ripoti",
     color: "#9C27B0",
     permissions: ["sell", "manage_stock", "view_reports"]
   },
   4: { 
     name: "Admin", 
+    nameSwahili: "Msimamizi",
     description: "Full access including settings",
+    descriptionSwahili: "Anaweza yote ikiwa ni pamoja na mipangilio",
     color: "#FF9800",
     permissions: ["sell", "manage_stock", "view_reports", "manage_staff", "settings"]
   }
@@ -171,6 +180,7 @@ function createSettingsGearIcon() {
     cursor: pointer;
     margin-right: 10px;
     transition: all 0.3s ease;
+    flex-shrink: 0;
   `;
 
   settingsBtn.onmouseover = () => {
@@ -223,6 +233,8 @@ function showSettingsMenu() {
     align-items: flex-start;
     justify-content: flex-end;
     padding-top: 60px;
+    padding-right: 10px;
+    box-sizing: border-box;
   `;
 
   menuOverlay.innerHTML = `
@@ -231,7 +243,7 @@ function showSettingsMenu() {
       border-radius: 12px;
       box-shadow: 0 10px 40px rgba(0,0,0,0.15);
       width: 260px;
-      margin-right: 10px;
+      max-width: calc(100vw - 20px);
       overflow: hidden;
     ">
       <div style="
@@ -245,7 +257,7 @@ function showSettingsMenu() {
         gap: 10px;
       ">
         <span>⚙️</span>
-        <span>Settings</span>
+        <span>Settings / Mipangilio</span>
       </div>
       
       <div class="settings-menu-items" style="padding: 8px 0;">
@@ -264,7 +276,7 @@ function showSettingsMenu() {
           color: #444;
         ">
           <span style="font-size: 18px;">👥</span>
-          <span>Manage Staff Members</span>
+          <span>Manage Staff / Simamia Wafanyakazi</span>
         </button>
       </div>
     </div>
@@ -318,7 +330,7 @@ async function openStaffManager() {
   }
 
   if (!currentShopId) {
-    alert('Please login first');
+    alert('Please login first / Tafadhali ingia kwanza');
     return;
   }
 
@@ -327,7 +339,7 @@ async function openStaffManager() {
 }
 
 // ======================================================
-// CREATE COMPACT STAFF OVERLAY
+// CREATE COMPACT STAFF OVERLAY (Responsive)
 // ======================================================
 function createStaffOverlay() {
   // Remove existing overlay if present
@@ -349,7 +361,7 @@ function createStaffOverlay() {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 10px;
     box-sizing: border-box;
     backdrop-filter: blur(5px);
   `;
@@ -359,30 +371,34 @@ function createStaffOverlay() {
       background: white;
       border-radius: 16px;
       width: 100%;
-      max-width: 900px;
+      max-width: 1000px;
       height: 100%;
-      max-height: 85vh;
+      max-height: 90vh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
       box-shadow: 0 10px 40px rgba(0,0,0,0.2);
     ">
-      <!-- Header - Compact -->
+      <!-- Header -->
       <div style="
-        padding: 18px 24px;
+        padding: 16px 20px;
         background: linear-gradient(135deg, #667eea, #764ba2);
         color: white;
         flex-shrink: 0;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
       ">
-        <div>
-          <h2 style="margin: 0; font-size: 20px; font-weight: 600; display: flex; align-items: center; gap: 10px;">
+        <div style="min-width: 0;">
+          <h2 style="margin: 0; font-size: 20px; font-weight: 600; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
             <span>👥</span>
-            <span>Staff Management</span>
+            <span>Staff Management / Usimamizi wa Wafanyakazi</span>
           </h2>
-          <p style="margin: 4px 0 0; font-size: 13px; opacity: 0.9;">Add and manage your team members</p>
+          <p style="margin: 4px 0 0; font-size: 13px; opacity: 0.9;">
+            Add and manage your team members / Ongeza na simamia wafanyakazi wako
+          </p>
         </div>
         <button id="close-staff-manager" style="
           background: rgba(255,255,255,0.2);
@@ -394,24 +410,27 @@ function createStaffOverlay() {
           font-size: 22px;
           cursor: pointer;
           line-height: 1;
+          flex-shrink: 0;
         ">×</button>
       </div>
 
-      <!-- Search and Add Button - Compact -->
+      <!-- Search and Add Button -->
       <div style="
-        padding: 16px 24px;
+        padding: 16px 20px;
         background: #f8f9fa;
         border-bottom: 1px solid #e9ecef;
         display: flex;
         gap: 10px;
         align-items: center;
         flex-shrink: 0;
+        flex-wrap: wrap;
       ">
         <input type="text" 
                id="staff-search" 
-               placeholder="🔍 Search staff..."
+               placeholder="🔍 Search staff / Tafuta mfanyakazi..."
                style="
-                 flex: 1;
+                 flex: 2;
+                 min-width: 200px;
                  padding: 10px 14px;
                  border: 1px solid #ddd;
                  border-radius: 8px;
@@ -432,13 +451,14 @@ function createStaffOverlay() {
           display: flex;
           align-items: center;
           gap: 6px;
+          flex: 0 1 auto;
         ">
           <span>+</span>
-          <span>Add Staff</span>
+          <span>Add Staff / Ongeza</span>
         </button>
       </div>
 
-      <!-- Compact Staff List -->
+      <!-- Staff List -->
       <div style="
         flex: 1;
         overflow-y: auto;
@@ -457,14 +477,14 @@ function createStaffOverlay() {
             color: #999;
           ">
             <div style="font-size: 40px; margin-bottom: 12px;">⏳</div>
-            <p style="margin: 0; font-size: 14px;">Loading staff members...</p>
+            <p style="margin: 0; font-size: 14px;">Loading staff members... / Inapakia...</p>
           </div>
         </div>
       </div>
 
       <!-- Footer with count -->
       <div id="staff-footer" style="
-        padding: 12px 24px;
+        padding: 12px 20px;
         background: #f8f9fa;
         border-top: 1px solid #e9ecef;
         font-size: 13px;
@@ -473,10 +493,12 @@ function createStaffOverlay() {
         justify-content: space-between;
         align-items: center;
         flex-shrink: 0;
+        flex-wrap: wrap;
+        gap: 10px;
       ">
-        <div id="staff-count">0 staff members</div>
+        <div id="staff-count">0 staff members / wafanyakazi 0</div>
         <div id="staff-tips" style="font-size: 12px; color: #999;">
-          Click + to add new staff
+          Click + to add new staff / Bonyeza + kuongeza
         </div>
       </div>
     </div>
@@ -526,8 +548,8 @@ function setupStaffRealtimeListener() {
           color: #999;
         ">
           <div style="font-size: 48px; margin-bottom: 16px;">👥</div>
-          <p style="margin: 0 0 8px; color: #666; font-size: 15px;">No Staff Members Yet</p>
-          <p style="margin: 0; font-size: 13px; color: #999;">Click "Add Staff" to get started</p>
+          <p style="margin: 0 0 8px; color: #666; font-size: 15px;">No Staff Members Yet / Hakuna Wafanyakazi Bado</p>
+          <p style="margin: 0; font-size: 13px; color: #999;">Click "Add Staff" to get started / Bonyeza "Ongeza" kuanza</p>
         </div>
       `;
       
@@ -551,7 +573,7 @@ function setupStaffRealtimeListener() {
 }
 
 // ======================================================
-// CREATE COMPACT STAFF CARD
+// CREATE COMPACT STAFF CARD (Responsive)
 // ======================================================
 function createStaffCard(staffId, staffData) {
   const card = document.createElement('div');
@@ -566,7 +588,8 @@ function createStaffCard(staffId, staffData) {
     padding: 12px;
     border-bottom: 1px solid #f0f0f0;
     transition: all 0.2s;
-    gap: 12px;
+    gap: 8px;
+    flex-wrap: wrap;
   `;
 
   // Get access level color
@@ -608,41 +631,40 @@ function createStaffCard(staffId, staffData) {
     </div>
 
     <!-- Staff Details -->
-    <div style="flex: 1; min-width: 0;">
+    <div style="flex: 1; min-width: 200px;">
       <div style="
         display: flex;
         align-items: baseline;
         gap: 8px;
         margin-bottom: 4px;
+        flex-wrap: wrap;
       ">
         <div style="
           font-weight: 600;
           font-size: 14px;
           color: #333;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          white-space: normal;
+          word-break: break-word;
         ">${staffData.name || 'Unnamed'}</div>
         
         <div style="
           font-size: 11px;
           color: white;
           background: ${roleColor};
-          padding: 2px 6px;
+          padding: 2px 8px;
           border-radius: 10px;
           white-space: nowrap;
           font-weight: 600;
         ">Level ${accessLevel}</div>
       </div>
       
-      <div style="display: flex; align-items: center; gap: 12px; font-size: 12px; color: #666;">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #666; flex-wrap: wrap;">
         <div style="display: flex; align-items: center; gap: 4px;">
           <span>📧</span>
           <span style="
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 180px;
+            white-space: normal;
+            word-break: break-word;
+            max-width: 200px;
           ">${staffData.email || 'No email'}</span>
         </div>
         
@@ -657,16 +679,16 @@ function createStaffCard(staffId, staffData) {
           font-size: 11px;
           color: ${roleColor};
           background: ${roleColor}15;
-          padding: 2px 6px;
+          padding: 2px 8px;
           border-radius: 10px;
           white-space: nowrap;
         ">${staffData.roleName || levelInfo.name}</div>
         
         ${formattedDate ? `
           <div style="
-            margin-left: auto;
             color: #999;
             font-size: 11px;
+            margin-left: auto;
           ">
             ${formattedDate}
           </div>
@@ -677,7 +699,7 @@ function createStaffCard(staffId, staffData) {
     <!-- Delete Button -->
     <button class="delete-staff-btn" 
             data-id="${staffId}"
-            title="Remove ${staffData.name}"
+            title="Remove ${staffData.name} / Ondoa ${staffData.name}"
             style="
               background: transparent;
               border: 1px solid #ff6b6b;
@@ -692,6 +714,7 @@ function createStaffCard(staffId, staffData) {
               justify-content: center;
               flex-shrink: 0;
               transition: all 0.2s;
+              margin-left: auto;
             ">
       🗑️
     </button>
@@ -700,20 +723,29 @@ function createStaffCard(staffId, staffData) {
   // Add hover effect
   card.onmouseover = () => {
     card.style.background = '#f8f9fa';
-    card.querySelector('.delete-staff-btn').style.background = '#ff6b6b';
-    card.querySelector('.delete-staff-btn').style.color = 'white';
-    card.querySelector('.delete-staff-btn').style.borderColor = '#ff6b6b';
+    const deleteBtn = card.querySelector('.delete-staff-btn');
+    if (deleteBtn) {
+      deleteBtn.style.background = '#ff6b6b';
+      deleteBtn.style.color = 'white';
+      deleteBtn.style.borderColor = '#ff6b6b';
+    }
   };
   
   card.onmouseout = () => {
     card.style.background = 'transparent';
-    card.querySelector('.delete-staff-btn').style.background = 'transparent';
-    card.querySelector('.delete-staff-btn').style.color = '#ff6b6b';
-    card.querySelector('.delete-staff-btn').style.borderColor = '#ff6b6b';
+    const deleteBtn = card.querySelector('.delete-staff-btn');
+    if (deleteBtn) {
+      deleteBtn.style.background = 'transparent';
+      deleteBtn.style.color = '#ff6b6b';
+      deleteBtn.style.borderColor = '#ff6b6b';
+    }
   };
 
   // Event listener for delete
-  card.querySelector('.delete-staff-btn').onclick = () => deleteStaff(staffId, staffData.name);
+  card.querySelector('.delete-staff-btn').onclick = (e) => {
+    e.stopPropagation();
+    deleteStaff(staffId, staffData.name);
+  };
 
   return card;
 }
@@ -734,7 +766,7 @@ function filterStaffMembers(searchTerm) {
                     email.includes(searchTerm) ||
                     role.includes(searchTerm);
     
-    card.style.display = matches ? '' : 'none';
+    card.style.display = matches ? 'flex' : 'none';
     if (matches) visibleCount++;
   });
   
@@ -751,8 +783,8 @@ function filterStaffMembers(searchTerm) {
           color: #999;
         ">
           <div style="font-size: 48px; margin-bottom: 16px;">🔍</div>
-          <p style="margin: 0 0 8px; color: #666; font-size: 15px;">No matching staff members</p>
-          <p style="margin: 0; font-size: 13px; color: #999;">Try a different search term</p>
+          <p style="margin: 0 0 8px; color: #666; font-size: 15px;">No matching staff members / Hakuna wafanyakazi wanaolingana</p>
+          <p style="margin: 0; font-size: 13px; color: #999;">Try a different search term / Jaribu maneno mengine</p>
         </div>
       `;
     }
@@ -760,18 +792,20 @@ function filterStaffMembers(searchTerm) {
 }
 
 // ======================================================
-// UPDATE STAFF COUNT
+// UPDATE STAFF COUNT (Bilingual)
 // ======================================================
 function updateStaffCount(visible = null, total = null) {
   const countElement = document.getElementById('staff-count');
   if (!countElement) return;
   
   if (visible === null) {
-    countElement.textContent = '0 staff members';
+    countElement.textContent = '0 staff members / wafanyakazi 0';
   } else if (total !== null && total !== visible) {
-    countElement.textContent = `${visible} of ${total} staff`;
+    countElement.textContent = `${visible} of ${total} staff / ${visible} kati ya ${total} wafanyakazi`;
   } else {
-    countElement.textContent = `${visible} staff member${visible !== 1 ? 's' : ''}`;
+    const staffText = visible === 1 ? 'staff member' : 'staff members';
+    const swahiliText = visible === 1 ? 'mfanyakazi' : 'wafanyakazi';
+    countElement.textContent = `${visible} ${staffText} / ${visible} ${swahiliText}`;
   }
 }
 
@@ -832,11 +866,7 @@ async function checkPlanLimit() {
 }
 
 // ======================================================
-// SHOW ADD STAFF FORM - UPDATED FOR PLAN CHECK
-// ======================================================
-
-// ======================================================
-// SHOW ADD STAFF FORM - UPDATED FOR PLAN CHECK WITH UPGRADE TRIGGER
+// SHOW ADD STAFF FORM (Bilingual + Responsive)
 // ======================================================
 async function showAddStaffForm() {
   console.log("🔍 Checking if can add staff...");
@@ -862,17 +892,16 @@ async function showAddStaffForm() {
     // Instead of just showing toast, trigger upgrade modal
     if (typeof window.showUpgradeModal === 'function') {
       // Directly call the upgrade modal function
-      window.showUpgradeModal(currentPlanName, "Add staff members");
+      window.showUpgradeModal(currentPlanName, "Add staff members / Ongeza wafanyakazi");
     } else {
       // Fallback: show toast and log error
-      showToast('Staff limit reached. Upgrade required to add more staff.', 'error');
+      showToast('Staff limit reached. Upgrade required to add more staff. / Kikomo cha wafanyakazi kimefikwa. Inahitaji kuboresha kuongeza wafanyakazi.', 'error');
       console.error('⚠️ upgrade.js not loaded or showUpgradeModal function not available');
     }
     return;
   }
   
   console.log("✅ Can add staff, showing form...");
-  // ... rest of the function (show the staff form)}
   
   // If allowed, show the form
   const formOverlay = document.createElement('div');
@@ -888,7 +917,7 @@ async function showAddStaffForm() {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 10px;
     box-sizing: border-box;
     backdrop-filter: blur(5px);
   `;
@@ -898,23 +927,27 @@ async function showAddStaffForm() {
       background: white;
       border-radius: 16px;
       width: 100%;
-      max-width: 480px;
+      max-width: 500px;
       max-height: 90vh;
       overflow-y: auto;
       box-shadow: 0 15px 50px rgba(0,0,0,0.25);
     ">
+      <!-- Header -->
       <div style="
-        padding: 20px;
+        padding: 16px 20px;
         background: linear-gradient(135deg, #2ed573, #1dd1a1);
         color: white;
         border-radius: 16px 16px 0 0;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        position: sticky;
+        top: 0;
+        z-index: 10;
       ">
-        <h2 style="margin: 0; font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+        <h2 style="margin: 0; font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; word-break: break-word;">
           <span>+</span>
-          <span>Add Staff Member</span>
+          <span>Add Staff Member / Ongeza Mfanyakazi</span>
         </h2>
         <button id="close-staff-form" style="
           background: rgba(255,255,255,0.2);
@@ -926,18 +959,21 @@ async function showAddStaffForm() {
           font-size: 20px;
           cursor: pointer;
           line-height: 1;
+          flex-shrink: 0;
         ">×</button>
       </div>
 
-      <form id="staff-form" style="padding: 24px;">
+      <!-- Form -->
+      <form id="staff-form" style="padding: 20px;">
+        <!-- Full Name -->
         <div style="margin-bottom: 16px;">
           <label style="display: block; margin-bottom: 6px; color: #555; font-size: 13px; font-weight: 500;">
-            Full Name *
+            Full Name * / Jina Kamili *
           </label>
           <input type="text" 
                  id="staff-name" 
                  required 
-                 placeholder="e.g., John Doe"
+                 placeholder="e.g., John Doe / mfano: John Doe"
                  autocomplete="off"
                  style="
                    width: 100%;
@@ -950,14 +986,15 @@ async function showAddStaffForm() {
                  ">
         </div>
 
+        <!-- Email -->
         <div style="margin-bottom: 16px;">
           <label style="display: block; margin-bottom: 6px; color: #555; font-size: 13px; font-weight: 500;">
-            Email Address *
+            Email Address * / Barua Pepe *
           </label>
           <input type="email" 
                  id="staff-email" 
                  required 
-                 placeholder="e.g., john@example.com"
+                 placeholder="e.g., john@example.com / mfano: john@example.com"
                  autocomplete="off"
                  style="
                    width: 100%;
@@ -969,17 +1006,18 @@ async function showAddStaffForm() {
                    transition: all 0.3s;
                  ">
           <div style="font-size: 11px; color: #777; margin-top: 4px;">
-            Staff will use this email to log in with Google
+            Staff will use this email to log in with Google / Mfanyakazi atatumia barua pepe hii kuingia na Google
           </div>
         </div>
 
+        <!-- Phone -->
         <div style="margin-bottom: 16px;">
           <label style="display: block; margin-bottom: 6px; color: #555; font-size: 13px; font-weight: 500;">
-            Phone Number (Optional)
+            Phone Number (Optional) / Namba ya Simu (Si lazima)
           </label>
           <input type="tel" 
                  id="staff-phone" 
-                 placeholder="e.g., +254712345678"
+                 placeholder="e.g., +254712345678 / mfano: +254712345678"
                  autocomplete="off"
                  style="
                    width: 100%;
@@ -992,112 +1030,47 @@ async function showAddStaffForm() {
                  ">
         </div>
 
-        <!-- ACCESS LEVEL SELECTION - 4 LEVEL SYSTEM -->
+        <!-- ACCESS LEVEL SELECTION -->
         <div style="margin-bottom: 16px;">
           <label style="display: block; margin-bottom: 8px; color: #555; font-size: 13px; font-weight: 500;">
-            Access Level *
+            Access Level * / Kiwango cha Ufikiaji *
           </label>
           
           <div style="display: flex; flex-direction: column; gap: 8px;">
-            <!-- Level 1: Basic -->
-            <label style="
-              display: flex;
-              align-items: center;
-              padding: 12px;
-              border: 1px solid #e0e0e0;
-              border-radius: 8px;
-              cursor: pointer;
-              transition: all 0.3s;
-              background: #f9f9f9;
-            ">
-              <input type="radio" name="access-level" value="1" checked style="margin-right: 10px;">
-              <div style="flex: 1;">
-                <div style="font-weight: 600; font-size: 13px; color: #333; margin-bottom: 2px;">
-                  <span style="color: #4CAF50;">●</span> Level 1: Basic
+            ${Object.entries(ACCESS_LEVELS).map(([level, info]) => `
+              <label style="
+                display: flex;
+                align-items: center;
+                padding: 12px;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all 0.3s;
+                background: #f9f9f9;
+              ">
+                <input type="radio" name="access-level" value="${level}" ${level === '1' ? 'checked' : ''} style="margin-right: 10px; flex-shrink: 0;">
+                <div style="flex: 1;">
+                  <div style="font-weight: 600; font-size: 13px; color: #333; margin-bottom: 2px;">
+                    <span style="color: ${info.color};">●</span> Level ${level}: ${info.name} / ${info.nameSwahili}
+                  </div>
+                  <div style="font-size: 12px; color: #666; word-wrap: break-word;">
+                    ${info.description} / ${info.descriptionSwahili}
+                  </div>
                 </div>
-                <div style="font-size: 12px; color: #666;">
-                  Can only sell products
-                </div>
-              </div>
-            </label>
-            
-            <!-- Level 2: Intermediate -->
-            <label style="
-              display: flex;
-              align-items: center;
-              padding: 12px;
-              border: 1px solid #e0e0e0;
-              border-radius: 8px;
-              cursor: pointer;
-              transition: all 0.3s;
-              background: #f9f9f9;
-            ">
-              <input type="radio" name="access-level" value="2" style="margin-right: 10px;">
-              <div style="flex: 1;">
-                <div style="font-weight: 600; font-size: 13px; color: #333; margin-bottom: 2px;">
-                  <span style="color: #2196F3;">●</span> Level 2: Intermediate
-                </div>
-                <div style="font-size: 12px; color: #666;">
-                  Can sell & manage stock
-                </div>
-              </div>
-            </label>
-            
-            <!-- Level 3: Advanced -->
-            <label style="
-              display: flex;
-              align-items: center;
-              padding: 12px;
-              border: 1px solid #e0e0e0;
-              border-radius: 8px;
-              cursor: pointer;
-              transition: all 0.3s;
-              background: #f9f9f9;
-            ">
-              <input type="radio" name="access-level" value="3" style="margin-right: 10px;">
-              <div style="flex: 1;">
-                <div style="font-weight: 600; font-size: 13px; color: #333; margin-bottom: 2px;">
-                  <span style="color: #9C27B0;">●</span> Level 3: Advanced
-                </div>
-                <div style="font-size: 12px; color: #666;">
-                  Can sell, manage stock & view reports
-                </div>
-              </div>
-            </label>
-            
-            <!-- Level 4: Admin -->
-            <label style="
-              display: flex;
-              align-items: center;
-              padding: 12px;
-              border: 1px solid #e0e0e0;
-              border-radius: 8px;
-              cursor: pointer;
-              transition: all 0.3s;
-              background: #f9f9f9;
-            ">
-              <input type="radio" name="access-level" value="4" style="margin-right: 10px;">
-              <div style="flex: 1;">
-                <div style="font-weight: 600; font-size: 13px; color: #333; margin-bottom: 2px;">
-                  <span style="color: #FF9800;">●</span> Level 4: Admin
-                </div>
-                <div style="font-size: 12px; color: #666;">
-                  Full access including settings
-                </div>
-              </div>
-            </label>
+              </label>
+            `).join('')}
           </div>
         </div>
 
-        <!-- ROLE NAME (Display name) -->
+        <!-- Role Name -->
         <div style="margin-bottom: 16px;">
           <label style="display: block; margin-bottom: 6px; color: #555; font-size: 13px; font-weight: 500;">
-            Role Name (For Display) *
+            Role Name (For Display) * / Jina la Wadhifa (La Kuonyesha) *
           </label>
           <input type="text" 
                  id="staff-role-name" 
                  required 
-                 placeholder="e.g., Cashier, Stock Keeper, Manager"
+                 placeholder="e.g., Cashier, Stock Keeper, Manager / mfano: Mweka Hazina, Msimamizi wa Stock"
                  autocomplete="off"
                  style="
                    width: 100%;
@@ -1109,14 +1082,16 @@ async function showAddStaffForm() {
                    transition: all 0.3s;
                  ">
           <div style="font-size: 11px; color: #777; margin-top: 4px;">
-            This is just a display name (e.g., "Senior Cashier", "Assistant Manager")
+            This is just a display name (e.g., "Senior Cashier") / Jina la kuonyesha tu (mfano: "Mweka Hazina Mkuu")
           </div>
         </div>
 
-        <div style="display: flex; gap: 10px; margin-top: 24px;">
+        <!-- Buttons -->
+        <div style="display: flex; gap: 10px; margin-top: 24px; flex-wrap: wrap;">
           <button type="button" id="cancel-staff-form" style="
             flex: 1;
-            padding: 10px;
+            min-width: 100px;
+            padding: 12px;
             border: 1px solid #ddd;
             background: white;
             color: #666;
@@ -1125,11 +1100,12 @@ async function showAddStaffForm() {
             font-size: 14px;
             cursor: pointer;
             transition: all 0.3s;
-          ">Cancel</button>
+          ">Cancel / Ghairi</button>
           
           <button type="submit" style="
             flex: 2;
-            padding: 10px;
+            min-width: 150px;
+            padding: 12px;
             border: none;
             background: linear-gradient(135deg, #2ed573, #1dd1a1);
             color: white;
@@ -1138,7 +1114,7 @@ async function showAddStaffForm() {
             font-size: 14px;
             cursor: pointer;
             transition: all 0.3s;
-          ">Add Staff Member</button>
+          ">Add Staff Member / Ongeza Mfanyakazi</button>
         </div>
       </form>
     </div>
@@ -1222,14 +1198,14 @@ async function showAddStaffForm() {
     const accessLevel = accessLevelInput ? parseInt(accessLevelInput.value) : 1;
 
     if (!name || !email || !roleName) {
-      showToast('Please fill in all required fields', 'error');
+      showToast('Please fill in all required fields / Tafadhali jaza sehemu zote zinazohitajika', 'error');
       return;
     }
 
     // Validate email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      showToast('Please enter a valid email address', 'error');
+      showToast('Please enter a valid email address / Tafadhali weka barua pepe sahihi', 'error');
       return;
     }
 
@@ -1254,7 +1230,7 @@ async function showAddStaffForm() {
 async function saveStaffMember(staffData) {
   try {
     if (!currentShopId) {
-      throw new Error('No shop ID found');
+      throw new Error('No shop ID found / Hakuna ID ya duka');
     }
 
     // Generate staff ID using our improved function
@@ -1267,20 +1243,25 @@ async function saveStaffMember(staffData) {
 
     console.log(`✅ Staff member added:`, staffId);
     
-    // Show success message
-    showToast(`${staffData.name} added as ${staffData.roleName} (Level ${staffData.accessLevel})`, 'success');
+    // Show success message (bilingual)
+    showToast(`${staffData.name} added as ${staffData.roleName} (Level ${staffData.accessLevel}) / ${staffData.name} ameongezwa kama ${staffData.roleName} (Kiwango ${staffData.accessLevel})`, 'success');
 
   } catch (error) {
     console.error("❌ Error saving staff:", error);
-    showToast('Failed to save staff member. Please try again.', 'error');
+    showToast('Failed to save staff member / Imeshindwa kuhifadhi mfanyakazi', 'error');
   }
 }
 
 // ======================================================
-// DELETE STAFF
+// DELETE STAFF (Bilingual)
 // ======================================================
 async function deleteStaff(staffId, staffName) {
-  const confirmed = confirm(`Remove "${staffName}" from staff?\n\nThis cannot be undone.`);
+  const confirmed = confirm(
+    `Remove "${staffName}" from staff?\n\n` +
+    `This cannot be undone.\n\n` +
+    `Ondoa "${staffName}" kwenye wafanyakazi?\n` +
+    `Hii haiwezi kutenguliwa.`
+  );
   
   if (!confirmed) return;
 
@@ -1290,11 +1271,11 @@ async function deleteStaff(staffId, staffName) {
 
     console.log(`✅ Staff member deleted: ${staffId}`);
     
-    showToast(`${staffName} removed`, 'success');
+    showToast(`${staffName} removed / Imeondolewa`, 'success');
 
   } catch (error) {
     console.error("❌ Error deleting staff:", error);
-    showToast('Failed to remove staff. Please try again.', 'error');
+    showToast('Failed to remove staff / Imeshindwa kuondoa mfanyakazi', 'error');
   }
 }
 
@@ -1314,7 +1295,7 @@ function closeStaffManager() {
 }
 
 // ======================================================
-// SHOW TOAST NOTIFICATION
+// SHOW TOAST NOTIFICATION (Bilingual)
 // ======================================================
 function showToast(message, type = 'success') {
   // Remove existing toast
@@ -1328,7 +1309,10 @@ function showToast(message, type = 'success') {
   toast.style.cssText = `
     position: fixed;
     top: 70px;
-    right: 20px;
+    right: 10px;
+    left: 10px;
+    max-width: 350px;
+    margin: 0 auto;
     background: ${type === 'success' ? '#2ed573' : '#ff6b6b'};
     color: white;
     padding: 12px 20px;
@@ -1338,24 +1322,29 @@ function showToast(message, type = 'success') {
     font-weight: 500;
     font-size: 14px;
     animation: slideIn 0.3s ease;
-    max-width: 300px;
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255,255,255,0.2);
+    text-align: center;
+    word-wrap: break-word;
   `;
   toast.textContent = message;
 
-  const style = document.createElement('style');
-  style.textContent = `
-    @keyframes slideIn {
-      from { transform: translateX(300px); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
-    }
-    @keyframes slideOut {
-      from { transform: translateX(0); opacity: 1; }
-      to { transform: translateX(300px); opacity: 0; }
-    }
-  `;
-  document.head.appendChild(style);
+  // Add animation styles if not already present
+  if (!document.getElementById('toast-animation-style')) {
+    const style = document.createElement('style');
+    style.id = 'toast-animation-style';
+    style.textContent = `
+      @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes slideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
 
   document.body.appendChild(toast);
 
@@ -1364,9 +1353,6 @@ function showToast(message, type = 'success') {
     setTimeout(() => {
       if (document.body.contains(toast)) {
         document.body.removeChild(toast);
-      }
-      if (document.head.contains(style)) {
-        document.head.removeChild(style);
       }
     }, 300);
   }, 3000);

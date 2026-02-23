@@ -1,43 +1,44 @@
-// businessIntelligence.js - COMPLETE SELF-CONTAINED BUSINESS INTELLIGENCE MODULE
+// businessIntelligence.js - SIMPLE BUSINESS INTELLIGENCE FOR SUPERKEEPER
+// Shows only what shopkeepers actually need to know
+
 import { db } from "./firebase-config.js";
 import { 
     collection, 
     query, 
-    onSnapshot, 
-    orderBy, 
-    limit,
     getDocs,
     doc,
-    getDoc
+    getDoc,
+    orderBy,
+    limit,
+    where
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
 document.addEventListener("DOMContentLoaded", () => {
-    console.log("🚀 Business Intelligence module loaded");
+    console.log("📊 Business Intelligence module loading...");
     
-    let businessIntelligenceOverlay = null;
+    let biOverlay = null;
     let currentShopId = null;
-    let realTimeListeners = [];
+    let currentUser = null;
     
     const NAV_HEIGHT = 64;
     
     // ===========================================
-    // 1. INJECT CSS STYLES (UPDATED WITH CART FIX)
+    // 1. STYLES (Keep it simple)
     // ===========================================
     function injectStyles() {
-        if (document.getElementById('business-intelligence-styles')) return;
+        if (document.getElementById('bi-simple-styles')) return;
         
         const style = document.createElement('style');
-        style.id = 'business-intelligence-styles';
+        style.id = 'bi-simple-styles';
         style.textContent = `
-            /* Business Intelligence Overlay */
             #business-intelligence-overlay {
                 position: fixed;
                 top: ${NAV_HEIGHT}px;
                 left: 0;
                 width: 100%;
                 height: calc(100vh - ${NAV_HEIGHT}px);
-                background: #f8f9fa;
+                background: #f8fafc;
                 z-index: 2000;
                 display: none;
                 flex-direction: column;
@@ -45,7 +46,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 overflow: hidden;
             }
             
-            /* Purple Action Button - FIXED POSITION */
             #business-intelligence-btn {
                 background: linear-gradient(135deg, #667eea, #764ba2);
                 color: white;
@@ -63,733 +63,455 @@ document.addEventListener("DOMContentLoaded", () => {
                 align-items: center;
                 justify-content: center;
                 gap: 8px;
-                margin: 10px 5px; /* Added margin for spacing */
+                margin: 10px 5px;
             }
             
-            #business-intelligence-btn:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-            }
-            
-            /* Adjust action buttons container to prevent cart overlap */
-            .action-buttons {
-                display: flex;
-                flex-direction: column;
-                gap: 15px;
-                margin-bottom: 100px !important; /* Push content above cart */
-                padding-bottom: 20px;
-            }
-            
-            /* Mobile responsive layout */
-            @media (max-width: 768px) {
-                .action-buttons {
-                    flex-direction: column;
-                }
-                
-                #business-intelligence-btn {
-                    min-width: 100%;
-                    order: 3; /* Make it appear last */
-                }
-            }
-            
-            /* Cart icon adjustment when BI button is present */
-            body.has-bi-button #sales-cart-icon {
-                bottom: 100px !important; /* Move cart up to avoid overlap */
-            }
-            
-            /* BI Header */
             .bi-header {
-                padding: 20px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: linear-gradient(135deg, #1e293b, #0f172a);
                 color: white;
+                padding: 20px 24px;
                 flex-shrink: 0;
-                border-bottom: 1px solid rgba(255,255,255,0.1);
             }
             
-            /* Time Period Buttons */
-            .time-period-btn {
-                padding: 8px 16px;
-                background: rgba(255,255,255,0.1);
-                border: 1px solid rgba(255,255,255,0.2);
-                color: white;
-                border-radius: 20px;
+            .bi-stats-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 16px;
+                margin-bottom: 24px;
+            }
+            
+            .bi-stat-card {
+                background: white;
+                border-radius: 16px;
+                padding: 20px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+                border: 1px solid #e2e8f0;
+            }
+            
+            .bi-stat-value {
+                font-size: 32px;
+                font-weight: 800;
+                color: #0f172a;
+                margin: 8px 0 4px;
+            }
+            
+            .bi-stat-label {
                 font-size: 14px;
-                font-weight: 500;
-                cursor: pointer;
-                transition: all 0.2s;
+                color: #64748b;
             }
             
-            .time-period-btn:hover {
-                background: rgba(255,255,255,0.2);
+            .bi-section {
+                background: white;
+                border-radius: 16px;
+                padding: 20px;
+                margin-bottom: 20px;
+                border: 1px solid #e2e8f0;
             }
             
-            .time-period-btn.active {
-                background: rgba(255,255,255,0.3);
+            .bi-section-title {
+                font-size: 18px;
+                font-weight: 700;
+                color: #0f172a;
+                margin: 0 0 16px 0;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            
+            .bi-list-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 12px;
+                border-bottom: 1px solid #f1f5f9;
+            }
+            
+            .bi-list-item:last-child {
+                border-bottom: none;
+            }
+            
+            .bi-item-name {
+                font-weight: 600;
+                color: #334155;
+            }
+            
+            .bi-item-meta {
+                font-size: 13px;
+                color: #64748b;
+            }
+            
+            .bi-item-value {
+                font-weight: 700;
+                color: #0f172a;
+            }
+            
+            .bi-badge {
+                padding: 4px 10px;
+                border-radius: 20px;
+                font-size: 12px;
                 font-weight: 600;
             }
             
-            /* Metrics Cards */
-            .metric-card {
+            .bi-badge-warning {
+                background: #fef3c7;
+                color: #92400e;
+            }
+            
+            .bi-badge-success {
+                background: #dcfce7;
+                color: #166534;
+            }
+            
+            .bi-badge-danger {
+                background: #fee2e2;
+                color: #991b1b;
+            }
+            
+            .time-filter {
+                display: flex;
+                gap: 8px;
+                margin-top: 12px;
+            }
+            
+            .time-filter-btn {
+                padding: 6px 14px;
+                background: rgba(255,255,255,0.1);
+                border: 1px solid rgba(255,255,255,0.2);
+                color: white;
+                border-radius: 30px;
+                font-size: 13px;
+                cursor: pointer;
+            }
+            
+            .time-filter-btn.active {
                 background: white;
-                border-radius: 16px;
-                padding: 20px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-                border: 1px solid #e9ecef;
-                transition: all 0.3s ease;
+                color: #0f172a;
+                font-weight: 600;
             }
             
-            .metric-card:hover {
-                transform: translateY(-4px);
-                box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            .loading-spinner {
+                width: 40px;
+                height: 40px;
+                border: 4px solid #e2e8f0;
+                border-top: 4px solid #667eea;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+                margin: 40px auto;
             }
             
-            .metric-value {
-                font-size: 36px;
-                font-weight: 800;
-                margin: 10px 0;
-                line-height: 1;
-            }
-            
-            /* Chart Containers */
-            .chart-container {
-                background: white;
-                border-radius: 16px;
-                padding: 20px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-                border: 1px solid #e9ecef;
-                margin-bottom: 20px;
-            }
-            
-            /* Insight Cards */
-            .insight-card {
-                background: white;
-                border-radius: 12px;
-                padding: 16px;
-                margin-bottom: 12px;
-                border-left: 4px solid #667eea;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            }
-            
-            .insight-card.warning {
-                border-left-color: #ff6b6b;
-                background: #fff5f5;
-            }
-            
-            .insight-card.success {
-                border-left-color: #2ed573;
-                background: #f0fff4;
-            }
-            
-            /* Loading Animation */
-            @keyframes pulse {
-                0%, 100% { opacity: 1; }
-                50% { opacity: 0.5; }
-            }
-            
-            .loading-pulse {
-                animation: pulse 1.5s infinite;
-            }
-            
-            /* Responsive Grid */
-            .metrics-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                gap: 20px;
-                margin-bottom: 30px;
-            }
-            
-            /* Tablet and Desktop */
-            @media (min-width: 768px) {
-                .metrics-grid {
-                    grid-template-columns: repeat(2, 1fr);
-                }
-                
-                .action-buttons {
-                    flex-direction: row !important;
-                    flex-wrap: wrap;
-                }
-                
-                #business-intelligence-btn {
-                    min-width: calc(50% - 20px);
-                }
-            }
-            
-            /* Desktop */
-            @media (min-width: 1024px) {
-                .metrics-grid {
-                    grid-template-columns: repeat(4, 1fr);
-                }
-                
-                .action-buttons {
-                    flex-direction: row;
-                }
-                
-                #business-intelligence-btn {
-                    min-width: 200px;
-                    flex: 1;
-                }
-            }
-            
-            /* Scrollbar Styling */
-            #business-intelligence-overlay ::-webkit-scrollbar {
-                width: 8px;
-            }
-            
-            #business-intelligence-overlay ::-webkit-scrollbar-track {
-                background: #f1f1f1;
-                border-radius: 4px;
-            }
-            
-            #business-intelligence-overlay ::-webkit-scrollbar-thumb {
-                background: #c1c1c1;
-                border-radius: 4px;
-            }
-            
-            #business-intelligence-overlay ::-webkit-scrollbar-thumb:hover {
-                background: #a1a1a1;
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
             }
         `;
-        
         document.head.appendChild(style);
     }
     
     // ===========================================
-    // 2. INJECT ACTION BUTTON (UPDATED)
+    // 2. INJECT BUTTON
     // ===========================================
-    function injectActionButton() {
-        // Check if button already exists
+    function injectButton() {
         if (document.getElementById('business-intelligence-btn')) return;
         
-        // Find action buttons container
         const actionButtons = document.querySelector('.action-buttons');
-        if (!actionButtons) {
-            console.error('Action buttons container not found');
-            return;
+        if (!actionButtons) return;
+        
+        const btn = document.createElement('button');
+        btn.id = 'business-intelligence-btn';
+        btn.innerHTML = '📊 Business Intelligence';
+        btn.onclick = openBI;
+        
+        actionButtons.appendChild(btn);
+        console.log('✅ BI button added');
+    }
+    
+    // ===========================================
+    // 3. GET SHOP ID (Helper)
+    // ===========================================
+    async function getShopId() {
+        const auth = getAuth();
+        const user = auth.currentUser;
+        if (!user) return null;
+        
+        // Check if staff
+        const sessionType = localStorage.getItem('sessionType');
+        if (sessionType === 'staff') {
+            try {
+                const staffContext = JSON.parse(localStorage.getItem('staffContext') || '{}');
+                if (staffContext.shopId) return staffContext.shopId;
+            } catch (e) {}
         }
         
-        // Add class to body for CSS targeting
-        document.body.classList.add('has-bi-button');
+        // Check if owner with shop mapping
+        try {
+            const userDoc = await getDoc(doc(db, "Users", user.uid));
+            if (userDoc.exists() && userDoc.data().shop_id) {
+                return userDoc.data().shop_id;
+            }
+        } catch (e) {}
         
-        // Create the new button
-        const biButton = document.createElement('button');
-        biButton.id = 'business-intelligence-btn';
-        biButton.innerHTML = `
-            <span style="display: flex; align-items: center; gap: 8px;">
-                📊 My Business Intelligence
-            </span>
-        `;
-        
-        // Add click event
-        biButton.addEventListener('click', openBusinessIntelligenceOverlay);
-        
-        // Append to action buttons
-        actionButtons.appendChild(biButton);
-        
-        // Adjust cart icon position if it exists
-        adjustCartIconPosition();
-        
-        console.log('✅ Business Intelligence button injected');
-    }
-    
-    function adjustCartIconPosition() {
-        const cartIcon = document.getElementById('sales-cart-icon');
-        if (cartIcon) {
-            cartIcon.style.bottom = '100px'; // Move cart icon up
-        }
+        return user.uid; // Default
     }
     
     // ===========================================
-    // 3. CREATE OVERLAY
+    // 4. LOAD BUSINESS DATA (Simple & Direct)
     // ===========================================
-    function createBusinessIntelligenceOverlay() {
-        if (businessIntelligenceOverlay) return;
-        
-        businessIntelligenceOverlay = document.createElement("div");
-        businessIntelligenceOverlay.id = "business-intelligence-overlay";
-        document.body.appendChild(businessIntelligenceOverlay);
-    }
-    
-    // ===========================================
-    // 4. LOAD BUSINESS INTELLIGENCE DATA (FIXED - MOVE THIS UP)
-    // ===========================================
-    async function loadBusinessIntelligence(timePeriod = 'today') {
-        console.log(`📊 Loading business intelligence for: ${timePeriod}`);
-        
-        const content = document.getElementById('bi-content');
-        if (!content) return;
+    async function loadBusinessData(timeFilter = 'today') {
+        console.log(`📊 Loading data for: ${timeFilter}`);
         
         try {
-            const auth = getAuth();
-            const user = auth.currentUser;
-            if (!user) throw new Error('User not logged in');
+            const shopId = await getShopId();
+            if (!shopId) throw new Error('No shop ID found');
             
-            // Get shop ID
-            if (!currentShopId) {
-                let shopId = user.uid;
-                const snap = await getDoc(doc(db, "Users", shopId));
-                if (snap.exists() && snap.data().shop_id) {
-                    shopId = snap.data().shop_id;
-                }
-                currentShopId = shopId;
+            // Calculate date range
+            const now = new Date();
+            const startDate = new Date();
+            
+            if (timeFilter === 'today') {
+                startDate.setHours(0, 0, 0, 0);
+            } else if (timeFilter === 'week') {
+                startDate.setDate(now.getDate() - 7);
+            } else if (timeFilter === 'month') {
+                startDate.setMonth(now.getMonth() - 1);
             }
             
-            // Calculate date range based on time period
-            const dateRange = getDateRange(timePeriod);
+            // Get all categories and items
+            const categoriesSnap = await getDocs(collection(db, "Shops", shopId, "categories"));
             
-            // Load all data in parallel
-            const [salesData, inventoryData] = await Promise.all([
-                getSalesData(dateRange),
-                getInventoryData()
-            ]);
+            let allItems = [];
+            let allSales = [];
+            let totalStockValue = 0;
+            let lowStockItems = [];
             
-            // Calculate insights
-            const insights = calculateBusinessInsights(salesData, inventoryData, dateRange);
-            
-            // Render the dashboard
-            renderBusinessIntelligence(insights, timePeriod);
-            
-        } catch (error) {
-            console.error('Error loading business intelligence:', error);
-            const content = document.getElementById('bi-content');
-            if (content) {
-                content.innerHTML = `
-                    <div style="text-align: center; padding: 60px 20px;">
-                        <div style="font-size: 48px; margin-bottom: 20px;">😕</div>
-                        <h3 style="margin: 0 0 8px; color: #ff6b6b;">Failed to load data</h3>
-                        <p style="margin: 0; font-size: 14px; color: #888;">${error.message}</p>
-                        <button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">
-                            Retry
-                        </button>
-                    </div>
-                `;
-            }
-        }
-    }
-    
-    // ===========================================
-    // 5. DATA FETCHING FUNCTIONS
-    // ===========================================
-    function getDateRange(period) {
-        const now = new Date();
-        const start = new Date();
-        
-        switch(period) {
-            case 'today':
-                start.setHours(0, 0, 0, 0);
-                break;
-            case 'week':
-                start.setDate(now.getDate() - 7);
-                break;
-            case 'month':
-                start.setMonth(now.getMonth() - 1);
-                break;
-            case 'all':
-                start.setFullYear(now.getFullYear() - 1);
-                break;
-            default:
-                start.setHours(0, 0, 0, 0);
-        }
-        
-        return { start, end: now };
-    }
-    
-    async function getSalesData(dateRange) {
-        try {
-            if (!currentShopId) return { total: 0, items: [], transactions: [] };
-            
-            const receiptsRef = collection(db, "Shops", currentShopId, "receipts");
-            const receiptsSnapshot = await getDocs(receiptsRef);
-            
-            const salesData = {
-                total: 0,
-                items: [],
-                transactions: []
-            };
-            
-            receiptsSnapshot.forEach(doc => {
-                const data = doc.data();
-                const receiptDate = data.timestamp?.toDate?.() || new Date(data.timestamp || data.created_at);
+            // Loop through each category
+            for (const categoryDoc of categoriesSnap.docs) {
+                const categoryName = categoryDoc.data().name || 'Uncategorized';
+                const itemsSnap = await getDocs(collection(categoryDoc.ref, "items"));
                 
-                // Filter by date range
-                if (receiptDate >= dateRange.start && receiptDate <= dateRange.end) {
-                    salesData.total += data.total || 0;
-                    salesData.transactions.push({
-                        id: data.receipt_id,
-                        total: data.total,
-                        date: receiptDate,
-                        items: data.items || []
-                    });
+                for (const itemDoc of itemsSnap.docs) {
+                    const item = itemDoc.data();
                     
-                    // Aggregate items
-                    if (data.items) {
-                        data.items.forEach(item => {
-                            const existing = salesData.items.find(i => i.id === item.id);
-                            if (existing) {
-                                existing.quantity += item.quantity;
-                                existing.revenue += (item.sellPrice || 0) * item.quantity;
-                            } else {
-                                salesData.items.push({
-                                    id: item.id,
-                                    name: item.name,
-                                    quantity: item.quantity,
-                                    revenue: (item.sellPrice || 0) * item.quantity,
-                                    price: item.sellPrice || 0
-                                });
+                    // Basic item info
+                    const itemInfo = {
+                        id: itemDoc.id,
+                        name: item.name || 'Unnamed',
+                        category: categoryName,
+                        stock: item.stock || 0,
+                        buyPrice: item.buyPrice || 0,
+                        sellPrice: item.sellPrice || 0,
+                        lowStockAlert: item.lowStockAlert || 5,
+                        images: item.images || []
+                    };
+                    
+                    allItems.push(itemInfo);
+                    
+                    // Calculate stock value
+                    totalStockValue += (itemInfo.stock * itemInfo.buyPrice);
+                    
+                    // Check low stock
+                    if (itemInfo.stock <= itemInfo.lowStockAlert && itemInfo.stock > 0) {
+                        lowStockItems.push(itemInfo);
+                    }
+                    
+                    // Extract sales from stockTransactions
+                    if (item.stockTransactions && Array.isArray(item.stockTransactions)) {
+                        item.stockTransactions.forEach(txn => {
+                            if (txn.type === 'sale') {
+                                const txnDate = txn.timestamp ? new Date(txn.timestamp * 1000) : new Date();
+                                
+                                // Filter by date
+                                if (txnDate >= startDate) {
+                                    allSales.push({
+                                        id: txn.id,
+                                        date: txnDate,
+                                        itemName: item.name,
+                                        quantity: txn.quantity || txn.quantity_sold || 1,
+                                        price: txn.sellPrice || txn.unitPrice || item.sellPrice || 0,
+                                        total: txn.totalPrice || (txn.quantity * item.sellPrice) || 0,
+                                        batchId: txn.batchId
+                                    });
+                                }
                             }
                         });
                     }
                 }
+            }
+            
+            // Sort sales by date (newest first)
+            allSales.sort((a, b) => b.date - a.date);
+            
+            // Calculate totals
+            const todaySales = allSales.filter(s => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                return s.date >= today;
             });
             
-            return salesData;
-        } catch (error) {
-            console.error('Error fetching sales data:', error);
-            return { total: 0, items: [], transactions: [] };
-        }
-    }
-    
-    async function getInventoryData() {
-        try {
-            if (!currentShopId) return { items: [], totalValue: 0, lowStock: [] };
+            const totalRevenue = allSales.reduce((sum, s) => sum + s.total, 0);
+            const todayRevenue = todaySales.reduce((sum, s) => sum + s.total, 0);
             
-            const categoriesRef = collection(db, "Shops", currentShopId, "categories");
-            const categoriesSnapshot = await getDocs(categoriesRef);
+            // Get top selling items
+            const salesByItem = {};
+            allSales.forEach(sale => {
+                if (!salesByItem[sale.itemName]) {
+                    salesByItem[sale.itemName] = { name: sale.itemName, quantity: 0, revenue: 0 };
+                }
+                salesByItem[sale.itemName].quantity += sale.quantity;
+                salesByItem[sale.itemName].revenue += sale.total;
+            });
             
-            const inventoryData = {
-                items: [],
-                totalValue: 0,
-                lowStock: [],
-                outOfStock: []
+            const topItems = Object.values(salesByItem)
+                .sort((a, b) => b.revenue - a.revenue)
+                .slice(0, 5);
+            
+            return {
+                summary: {
+                    todayRevenue,
+                    totalRevenue,
+                    totalSales: allSales.length,
+                    todaySales: todaySales.length,
+                    totalItems: allItems.length,
+                    totalStockValue,
+                    lowStockCount: lowStockItems.length
+                },
+                recentSales: allSales.slice(0, 10),
+                lowStockItems: lowStockItems.slice(0, 10),
+                topItems,
+                timeFilter
             };
             
-            for (const categoryDoc of categoriesSnapshot.docs) {
-                const itemsRef = collection(categoryDoc.ref, "items");
-                const itemsSnapshot = await getDocs(itemsRef);
-                
-                itemsSnapshot.forEach(itemDoc => {
-                    const data = itemDoc.data();
-                    const stock = data.stock || 0;
-                    const sellPrice = data.sellPrice || 0;
-                    const buyPrice = data.buyPrice || 0;
-                    const value = stock * buyPrice;
-                    
-                    const item = {
-                        id: itemDoc.id,
-                        name: data.name || 'Unnamed Item',
-                        category: categoryDoc.data().name || 'Uncategorized',
-                        stock: stock,
-                        sellPrice: sellPrice,
-                        buyPrice: buyPrice,
-                        stockValue: value,
-                        images: data.images || [],
-                        lowStockAlert: data.lowStockAlert || 5,
-                        lastUpdated: data.updatedAt || data.createdAt
-                    };
-                    
-                    inventoryData.items.push(item);
-                    inventoryData.totalValue += value;
-                    
-                    // Check stock status
-                    if (stock === 0) {
-                        inventoryData.outOfStock.push(item);
-                    } else if (stock <= item.lowStockAlert) {
-                        inventoryData.lowStock.push(item);
-                    }
-                });
-            }
-            
-            return inventoryData;
         } catch (error) {
-            console.error('Error fetching inventory data:', error);
-            return { items: [], totalValue: 0, lowStock: [], outOfStock: [] };
+            console.error('Error loading business data:', error);
+            throw error;
         }
     }
     
     // ===========================================
-    // 6. CALCULATE INSIGHTS
+    // 5. RENDER DASHBOARD (Clean & Simple)
     // ===========================================
-    function calculateBusinessInsights(salesData, inventoryData, dateRange) {
-        const insights = {
-            totalRevenue: salesData.total || 0,
-            averageSale: salesData.transactions.length > 0 
-                ? salesData.total / salesData.transactions.length 
-                : 0,
-            transactionsCount: salesData.transactions.length || 0,
-            
-            totalStockValue: inventoryData.totalValue || 0,
-            totalItems: inventoryData.items.length || 0,
-            lowStockCount: inventoryData.lowStock.length || 0,
-            outOfStockCount: inventoryData.outOfStock.length || 0,
-            
-            topSellingItems: salesData.items
-                .sort((a, b) => b.revenue - a.revenue)
-                .slice(0, 5),
-            
-            lowStockItems: inventoryData.lowStock
-                .sort((a, b) => a.stock - b.stock)
-                .slice(0, 10),
-            
-            outOfStockItems: inventoryData.outOfStock,
-            
-            estimatedProfit: salesData.total - (inventoryData.totalValue * 0.7),
-            
-            dailySales: calculateDailySales(salesData.transactions, dateRange),
-            
-            actionableInsights: generateActionableInsights(salesData, inventoryData)
-        };
-        
-        return insights;
-    }
-    
-    function calculateDailySales(transactions, dateRange) {
-        const daily = {};
-        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        
-        transactions.forEach(txn => {
-            const day = days[txn.date.getDay()];
-            daily[day] = (daily[day] || 0) + txn.total;
-        });
-        
-        return Object.entries(daily).map(([day, total]) => ({ day, total }));
-    }
-    
-    function generateActionableInsights(salesData, inventoryData) {
-        const insights = [];
-        
-        // Low stock insights
-        if (inventoryData.lowStock.length > 0) {
-            const lowStockNames = inventoryData.lowStock
-                .slice(0, 3)
-                .map(item => item.name)
-                .join(', ');
-            
-            insights.push({
-                type: 'warning',
-                title: '⚠️ Low Stock Alert',
-                message: `${inventoryData.lowStock.length} items are running low: ${lowStockNames}`,
-                action: 'Restock soon to avoid lost sales'
-            });
-        }
-        
-        // Out of stock insights
-        if (inventoryData.outOfStock.length > 0) {
-            insights.push({
-                type: 'critical',
-                title: '🚨 Out of Stock',
-                message: `${inventoryData.outOfStock.length} items are completely out of stock`,
-                action: 'Reorder immediately'
-            });
-        }
-        
-        // Top sellers insights
-        if (salesData.items.length > 0) {
-            const topSeller = salesData.items[0];
-            if (topSeller) {
-                insights.push({
-                    type: 'success',
-                    title: '🏆 Top Performer',
-                    message: `${topSeller.name} generated $${topSeller.revenue.toFixed(2)} in revenue`,
-                    action: 'Consider stocking more or creating promotions'
-                });
-            }
-        }
-        
-        // Stock value insight
-        if (inventoryData.totalValue > 0) {
-            insights.push({
-                type: 'info',
-                title: '💰 Inventory Value',
-                message: `Your current inventory is worth $${inventoryData.totalValue.toFixed(2)}`,
-                action: 'Review stock levels to optimize cash flow'
-            });
-        }
-        
-        return insights;
-    }
-    
-    // ===========================================
-    // 7. RENDER DASHBOARD
-    // ===========================================
-    function renderBusinessIntelligence(insights, timePeriod) {
+    function renderDashboard(data) {
         const content = document.getElementById('bi-content');
         if (!content) return;
         
-        const periodText = {
-            'today': 'Today',
-            'week': 'This Week',
-            'month': 'This Month',
-            'all': 'All Time'
-        }[timePeriod] || timePeriod;
+        const timeFilterNames = {
+            today: 'Today',
+            week: 'This Week',
+            month: 'This Month'
+        };
         
         content.innerHTML = `
-            <!-- Key Metrics -->
-            <div class="metrics-grid">
-                <div class="metric-card">
-                    <div style="font-size: 14px; color: #666; margin-bottom: 8px;">Total Revenue</div>
-                    <div class="metric-value" style="color: #2ed573;">$${insights.totalRevenue.toFixed(2)}</div>
-                    <div style="font-size: 13px; color: #888;">${periodText}</div>
+            <!-- Stats Grid -->
+            <div class="bi-stats-grid">
+                <div class="bi-stat-card">
+                    <div class="bi-stat-label">💰 Today's Sales</div>
+                    <div class="bi-stat-value">KSh ${data.summary.todayRevenue.toLocaleString()}</div>
+                    <div style="font-size: 13px; color: #64748b;">${data.summary.todaySales} transactions</div>
                 </div>
                 
-                <div class="metric-card">
-                    <div style="font-size: 14px; color: #666; margin-bottom: 8px;">Stock Value</div>
-                    <div class="metric-value" style="color: #667eea;">$${insights.totalStockValue.toFixed(2)}</div>
-                    <div style="font-size: 13px; color: #888;">${insights.totalItems} items</div>
+                <div class="bi-stat-card">
+                    <div class="bi-stat-label">📦 Total Items</div>
+                    <div class="bi-stat-value">${data.summary.totalItems}</div>
+                    <div style="font-size: 13px; color: #64748b;">in inventory</div>
                 </div>
                 
-                <div class="metric-card">
-                    <div style="font-size: 14px; color: #666; margin-bottom: 8px;">Transactions</div>
-                    <div class="metric-value" style="color: #ff6b6b;">${insights.transactionsCount}</div>
-                    <div style="font-size: 13px; color: #888;">Avg: $${insights.averageSale.toFixed(2)}</div>
-                </div>
-                
-                <div class="metric-card">
-                    <div style="font-size: 14px; color: #666; margin-bottom: 8px;">Stock Alerts</div>
-                    <div class="metric-value" style="color: #ffa502;">
-                        ${insights.lowStockCount + insights.outOfStockCount}
+                <div class="bi-stat-card">
+                    <div class="bi-stat-label">⚠️ Low Stock</div>
+                    <div class="bi-stat-value" style="color: ${data.summary.lowStockCount > 0 ? '#dc2626' : '#0f172a'};">
+                        ${data.summary.lowStockCount}
                     </div>
-                    <div style="font-size: 13px; color: #888;">
-                        ${insights.lowStockCount} low, ${insights.outOfStockCount} out
-                    </div>
+                    <div style="font-size: 13px; color: #64748b;">items need attention</div>
+                </div>
+                
+                <div class="bi-stat-card">
+                    <div class="bi-stat-label">💎 Stock Value</div>
+                    <div class="bi-stat-value">KSh ${data.summary.totalStockValue.toLocaleString()}</div>
+                    <div style="font-size: 13px; color: #64748b;">at cost price</div>
                 </div>
             </div>
             
-            <!-- Actionable Insights -->
-            <div style="margin-bottom: 30px;">
-                <h3 style="margin: 0 0 15px 0; color: #333; font-size: 18px;">💡 Actionable Insights</h3>
-                <div id="insights-list">
-                    ${insights.actionableInsights.map(insight => `
-                        <div class="insight-card ${insight.type === 'warning' ? 'warning' : insight.type === 'success' ? 'success' : ''}">
-                            <div style="font-weight: 600; color: #333; margin-bottom: 4px;">
-                                ${insight.title}
-                            </div>
-                            <div style="color: #666; font-size: 14px; margin-bottom: 6px;">
-                                ${insight.message}
-                            </div>
-                            <div style="font-size: 13px; color: #667eea; font-weight: 500;">
-                                💡 ${insight.action}
-                            </div>
-                        </div>
-                    `).join('')}
-                    
-                    ${insights.actionableInsights.length === 0 ? `
-                        <div class="insight-card success">
-                            <div style="font-weight: 600; color: #333; margin-bottom: 4px;">
-                                ✅ Everything Looks Good
-                            </div>
-                            <div style="color: #666; font-size: 14px;">
-                                Your business is running smoothly. Keep up the good work!
-                            </div>
-                        </div>
-                    ` : ''}
+            <!-- Recent Sales -->
+            <div class="bi-section">
+                <div class="bi-section-title">
+                    <span>🕒 Recent Sales (${timeFilterNames[data.timeFilter]})</span>
+                    <span style="font-size: 14px; font-weight: normal; color: #64748b; margin-left: auto;">
+                        Total: KSh ${data.summary.totalRevenue.toLocaleString()}
+                    </span>
                 </div>
-            </div>
-            
-            <!-- Top Selling Items -->
-            <div class="chart-container" style="margin-bottom: 20px;">
-                <h3 style="margin: 0 0 15px 0; color: #333; font-size: 18px;">🏆 Top Selling Items (${periodText})</h3>
-                <div style="max-height: 300px; overflow-y: auto;">
-                    ${insights.topSellingItems.length > 0 ? insights.topSellingItems.map((item, index) => `
-                        <div style="
-                            display: flex;
-                            align-items: center;
-                            padding: 12px;
-                            margin-bottom: 8px;
-                            background: ${index < 3 ? '#f8f9fa' : 'white'};
-                            border-radius: 10px;
-                            border-left: 4px solid ${index === 0 ? '#ffd700' : index === 1 ? '#c0c0c0' : index === 2 ? '#cd7f32' : '#e9ecef'};
-                        ">
-                            <div style="width: 30px; text-align: center; font-weight: 800; color: #666;">
-                                ${index + 1}
-                            </div>
-                            <div style="flex: 1;">
-                                <div style="font-weight: 600; color: #333;">${item.name}</div>
-                                <div style="font-size: 12px; color: #666;">
-                                    ${item.quantity} units sold
+                
+                ${data.recentSales.length > 0 ? `
+                    <div>
+                        ${data.recentSales.map(sale => `
+                            <div class="bi-list-item">
+                                <div>
+                                    <div class="bi-item-name">${sale.itemName}</div>
+                                    <div class="bi-item-meta">
+                                        ${sale.date.toLocaleDateString()} • ${sale.quantity} unit${sale.quantity > 1 ? 's' : ''}
+                                    </div>
                                 </div>
+                                <div class="bi-item-value">KSh ${sale.total.toLocaleString()}</div>
                             </div>
-                            <div style="text-align: right;">
-                                <div style="font-weight: 700; color: #2ed573; font-size: 16px;">
-                                    $${item.revenue.toFixed(2)}
-                                </div>
-                                <div style="font-size: 12px; color: #888;">
-                                    $${item.price} each
-                                </div>
-                            </div>
-                        </div>
-                    `).join('') : `
-                        <div style="text-align: center; padding: 40px 20px; color: #888; font-style: italic;">
-                            No sales data for ${periodText.toLowerCase()}
-                        </div>
-                    `}
-                </div>
+                        `).join('')}
+                    </div>
+                ` : `
+                    <div style="text-align: center; padding: 40px; color: #64748b;">
+                        No sales in this period
+                    </div>
+                `}
             </div>
             
             <!-- Low Stock Items -->
-            <div class="chart-container">
-                <h3 style="margin: 0 0 15px 0; color: #333; font-size: 18px;">📦 Items Needing Attention</h3>
-                <div style="max-height: 300px; overflow-y: auto;">
-                    ${insights.lowStockItems.length > 0 ? insights.lowStockItems.map(item => `
-                        <div style="
-                            display: flex;
-                            align-items: center;
-                            padding: 12px;
-                            margin-bottom: 8px;
-                            background: ${item.stock === 0 ? '#fff5f5' : '#fff5e6'};
-                            border-radius: 10px;
-                            border-left: 4px solid ${item.stock === 0 ? '#ff6b6b' : '#ffa502'};
-                        ">
-                            <div style="flex: 1;">
-                                <div style="font-weight: 600; color: #333; margin-bottom: 4px;">
-                                    ${item.name}
-                                    ${item.stock === 0 ? '<span style="color: #ff6b6b; font-size: 12px; margin-left: 8px;">(OUT OF STOCK)</span>' : ''}
+            ${data.lowStockItems.length > 0 ? `
+                <div class="bi-section">
+                    <div class="bi-section-title">
+                        <span>⚠️ Items Low on Stock</span>
+                        <span class="bi-badge bi-badge-warning" style="margin-left: auto;">
+                            Order soon
+                        </span>
+                    </div>
+                    
+                    <div>
+                        ${data.lowStockItems.map(item => `
+                            <div class="bi-list-item">
+                                <div>
+                                    <div class="bi-item-name">${item.name}</div>
+                                    <div class="bi-item-meta">
+                                        ${item.category} • Alert at: ${item.lowStockAlert}
+                                    </div>
                                 </div>
-                                <div style="font-size: 12px; color: #666;">
-                                    ${item.category} • Alert at: ${item.lowStockAlert} units
-                                </div>
-                            </div>
-                            <div style="text-align: right;">
-                                <div style="font-size: 24px; font-weight: 800; color: ${item.stock === 0 ? '#ff6b6b' : '#ffa502'};">
-                                    ${item.stock}
-                                </div>
-                                <div style="font-size: 12px; color: #888;">
-                                    units remaining
+                                <div>
+                                    <span class="bi-badge ${item.stock === 0 ? 'bi-badge-danger' : 'bi-badge-warning'}" 
+                                          style="margin-right: 8px;">
+                                        ${item.stock} left
+                                    </span>
                                 </div>
                             </div>
-                        </div>
-                    `).join('') : `
-                        <div style="text-align: center; padding: 40px 20px; color: #2ed573; font-weight: 500;">
-                            ✅ All items have sufficient stock!
-                        </div>
-                    `}
+                        `).join('')}
+                    </div>
                 </div>
-            </div>
+            ` : ''}
             
-            <!-- Daily Sales Chart -->
-            ${insights.dailySales.length > 0 ? `
-                <div class="chart-container">
-                    <h3 style="margin: 0 0 15px 0; color: #333; font-size: 18px;">📈 Sales by Day</h3>
-                    <div style="display: flex; align-items: flex-end; height: 200px; gap: 10px; padding: 20px 0;">
-                        ${insights.dailySales.map(day => {
-                            const maxValue = Math.max(...insights.dailySales.map(d => d.total));
-                            const height = maxValue > 0 ? (day.total / maxValue) * 150 : 10;
-                            return `
-                                <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
-                                    <div style="
-                                        width: 40px;
-                                        height: ${height}px;
-                                        background: linear-gradient(to top, #667eea, #764ba2);
-                                        border-radius: 8px 8px 0 0;
-                                        margin-bottom: 8px;
-                                    "></div>
-                                    <div style="font-size: 12px; color: #666; font-weight: 500;">
-                                        ${day.day}
-                                    </div>
-                                    <div style="font-size: 11px; color: #888; margin-top: 2px;">
-                                        $${day.total.toFixed(2)}
+            <!-- Top Selling Items -->
+            ${data.topItems.length > 0 ? `
+                <div class="bi-section">
+                    <div class="bi-section-title">
+                        <span>🏆 Top Selling Items</span>
+                    </div>
+                    
+                    <div>
+                        ${data.topItems.map((item, index) => `
+                            <div class="bi-list-item">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <span style="font-weight: 800; color: ${index === 0 ? '#fbbf24' : index === 1 ? '#94a3b8' : index === 2 ? '#b45309' : '#cbd5e1'};">
+                                        #${index + 1}
+                                    </span>
+                                    <div>
+                                        <div class="bi-item-name">${item.name}</div>
+                                        <div class="bi-item-meta">${item.quantity} units sold</div>
                                     </div>
                                 </div>
-                            `;
-                        }).join('')}
+                                <div class="bi-item-value">KSh ${item.revenue.toLocaleString()}</div>
+                            </div>
+                        `).join('')}
                     </div>
                 </div>
             ` : ''}
@@ -797,156 +519,116 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     
     // ===========================================
-    // 8. OPEN/CLOSE OVERLAY (FIXED)
+    // 6. OPEN BUSINESS INTELLIGENCE
     // ===========================================
-    async function openBusinessIntelligenceOverlay() {
+    async function openBI() {
         console.log('📊 Opening Business Intelligence...');
         
-        // Ensure styles are injected
         injectStyles();
         
-        // Create overlay if it doesn't exist
-        createBusinessIntelligenceOverlay();
+        // Create overlay if needed
+        if (!biOverlay) {
+            biOverlay = document.createElement('div');
+            biOverlay.id = 'business-intelligence-overlay';
+            document.body.appendChild(biOverlay);
+        }
         
-        // Show loading state
-        businessIntelligenceOverlay.innerHTML = `
+        // Show loading
+        biOverlay.innerHTML = `
             <div class="bi-header">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <div>
-                        <h1 style="margin: 0; font-size: 24px; font-weight: 700;">📊 My Business Intelligence</h1>
-                        <p style="margin: 6px 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">
-                            Real-time insights for smarter decisions
-                        </p>
-                    </div>
-                    <button id="close-business-intelligence" style="
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h1 style="margin: 0; font-size: 24px; font-weight: 700;">📊 Business Intelligence</h1>
+                    <button id="close-bi" style="
                         background: rgba(255,255,255,0.2);
                         border: none;
                         color: white;
-                        width: 44px;
-                        height: 44px;
-                        border-radius: 12px;
-                        font-size: 22px;
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 10px;
+                        font-size: 20px;
                         cursor: pointer;
-                        flex-shrink: 0;
                     ">×</button>
                 </div>
                 
-                <!-- Time Period Selector -->
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button class="time-period-btn active" data-period="today">Today</button>
-                    <button class="time-period-btn" data-period="week">This Week</button>
-                    <button class="time-period-btn" data-period="month">This Month</button>
-                    <button class="time-period-btn" data-period="all">All Time</button>
+                <div class="time-filter">
+                    <button class="time-filter-btn active" data-filter="today">Today</button>
+                    <button class="time-filter-btn" data-filter="week">This Week</button>
+                    <button class="time-filter-btn" data-filter="month">This Month</button>
                 </div>
             </div>
             
             <div id="bi-content" style="flex: 1; overflow-y: auto; padding: 20px;">
-                <div style="text-align: center; padding: 60px 20px;">
-                    <div style="font-size: 48px; margin-bottom: 20px; opacity: 0.5; animation: pulse 1.5s infinite;">📊</div>
-                    <h3 style="margin: 0 0 8px; color: #555; font-size: 18px;">Loading Business Intelligence...</h3>
-                    <p style="margin: 0; font-size: 14px; color: #888;">Analyzing your data in real-time</p>
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px;">
+                    <div class="loading-spinner"></div>
+                    <p style="color: #64748b; margin-top: 20px;">Loading your business data...</p>
                 </div>
-            </div>
-            
-            <div style="padding: 15px; background: white; border-top: 1px solid #e9ecef; text-align: center; flex-shrink: 0;">
-                <button id="refresh-bi" style="
-                    padding: 12px 24px;
-                    background: linear-gradient(135deg, #2ed573, #1dd1a1);
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    font-weight: 600;
-                    font-size: 14px;
-                    cursor: pointer;
-                ">
-                    🔄 Refresh Insights
-                </button>
             </div>
         `;
         
-        // Show overlay
-        businessIntelligenceOverlay.style.display = 'flex';
+        biOverlay.style.display = 'flex';
         document.body.style.overflow = 'hidden';
         
-        // Add event listeners
-        document.getElementById('close-business-intelligence').onclick = closeBusinessIntelligenceOverlay;
-        document.getElementById('refresh-bi').onclick = () => loadBusinessIntelligence('today');
+        // Close button
+        document.getElementById('close-bi').onclick = () => {
+            biOverlay.style.display = 'none';
+            document.body.style.overflow = '';
+        };
         
-        // Time period buttons
-        businessIntelligenceOverlay.querySelectorAll('.time-period-btn').forEach(btn => {
-            btn.onclick = (e) => {
-                businessIntelligenceOverlay.querySelectorAll('.time-period-btn').forEach(b => {
-                    b.classList.remove('active');
-                });
+        // Time filter buttons
+        const filterBtns = biOverlay.querySelectorAll('.time-filter-btn');
+        filterBtns.forEach(btn => {
+            btn.onclick = async (e) => {
+                filterBtns.forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
-                loadBusinessIntelligence(e.target.dataset.period);
+                
+                // Show loading in content
+                document.getElementById('bi-content').innerHTML = `
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px;">
+                        <div class="loading-spinner"></div>
+                        <p style="color: #64748b; margin-top: 20px;">Loading...</p>
+                    </div>
+                `;
+                
+                const data = await loadBusinessData(e.target.dataset.filter);
+                renderDashboard(data);
             };
         });
         
         // Load initial data
-        await loadBusinessIntelligence('today');
-    }
-    
-    function closeBusinessIntelligenceOverlay() {
-        if (businessIntelligenceOverlay) {
-            businessIntelligenceOverlay.style.display = 'none';
-            document.body.style.overflow = '';
-        }
-    }
-    
-    // ===========================================
-    // 9. REAL-TIME LISTENERS (OPTIONAL)
-    // ===========================================
-    function setupRealTimeListeners() {
-        if (!currentShopId) return;
-        
         try {
-            // Listen for new receipts (sales)
-            const receiptsRef = collection(db, "Shops", currentShopId, "receipts");
-            const receiptsQuery = query(receiptsRef, orderBy("timestamp", "desc"), limit(5));
-            
-            const receiptsListener = onSnapshot(receiptsQuery, (snapshot) => {
-                console.log('🔄 New sale detected, refreshing insights...');
-                loadBusinessIntelligence('today');
-            });
-            
-            realTimeListeners.push(receiptsListener);
-            
-            console.log('✅ Real-time listeners setup complete');
-            
+            const data = await loadBusinessData('today');
+            renderDashboard(data);
         } catch (error) {
-            console.error('Error setting up real-time listeners:', error);
+            document.getElementById('bi-content').innerHTML = `
+                <div style="text-align: center; padding: 60px 20px;">
+                    <div style="font-size: 48px; margin-bottom: 20px;">😕</div>
+                    <h3 style="color: #dc2626;">Failed to load data</h3>
+                    <p style="color: #64748b;">${error.message}</p>
+                    <button onclick="location.reload()" style="
+                        margin-top: 20px;
+                        padding: 10px 20px;
+                        background: #667eea;
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                    ">Try Again</button>
+                </div>
+            `;
         }
     }
     
-    function cleanUpRealTimeListeners() {
-        realTimeListeners.forEach(unsubscribe => {
-            if (typeof unsubscribe === 'function') {
-                unsubscribe();
-            }
-        });
-        realTimeListeners = [];
-    }
-    
     // ===========================================
-    // 10. INITIALIZATION
+    // 7. INITIALIZE
     // ===========================================
-    function initialize() {
-        // Inject CSS
+    function init() {
         injectStyles();
-        
-        // Inject button
-        injectActionButton();
-        
-        console.log('✅ Business Intelligence module initialized');
+        setTimeout(injectButton, 500); // Wait for DOM
+        console.log('✅ BI module ready');
     }
     
-    // Start initialization
-    initialize();
+    init();
     
-    // ===========================================
-    // 11. EXPORT TO WINDOW
-    // ===========================================
-    window.openBusinessIntelligenceOverlay = openBusinessIntelligenceOverlay;
-    window.closeBusinessIntelligenceOverlay = closeBusinessIntelligenceOverlay;
+    // Export to window
+    window.openBusinessIntelligence = openBI;
 });

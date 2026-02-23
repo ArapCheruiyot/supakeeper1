@@ -1,26 +1,20 @@
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-Q2YC5ESHSF"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-Q2YC5ESHSF');
-</script>
 {% extends "base.html" %}
 
 {% block content %}
-<!-- COMPACT HOMEPAGE - EVERYTHING FITS ON SCREEN -->
+<!-- COMPACT HOMEPAGE - MOBILE FIRST, EVERYTHING VISIBLE -->
 <div class="compact-homepage">
     
-    <!-- THIN BORDER CONTAINER -->
+    <!-- MAIN CONTAINER -->
     <div class="compact-container">
         
-        <!-- Header with Top-Right Buttons -->
+        <!-- Header with Two Buttons Side by Side -->
         <div class="compact-header">
-            <!-- Just one button on the right -->
             <div class="header-buttons">
-                <button class="btn-start" id="google-signin-btn">
-                    Start Free
+                <button class="btn-login" id="google-signin-btn">
+                    <span class="btn-icon">G</span> Log in with Google
+                </button>
+                <button class="btn-staff" id="staff-signin-btn">
+                    Staff Log In
                 </button>
             </div>
         </div>
@@ -35,7 +29,7 @@
             </nav>
         </div>
         
-        <!-- Main Content - Fits perfectly -->
+        <!-- Main Content -->
         <div class="compact-content">
             <!-- Logo on left -->
             <div class="compact-logo">
@@ -47,261 +41,306 @@
                 <h1>Superkeeper</h1>
                 <p class="tagline">Inventory for small shops</p>
                 
-                <div class="benefit">
-                    <span>✓</span> Track stock on phone
-                </div>
-                <div class="benefit">
-                    <span>✓</span> Manage staff easily
-                </div>
-                <div class="benefit">
-                    <span>✓</span> See sales in real-time
+                <div class="benefits-compact">
+                    <div class="benefit">
+                        <span>✓</span> Track stock on phone
+                    </div>
+                    <div class="benefit">
+                        <span>✓</span> Manage staff easily
+                    </div>
+                    <div class="benefit">
+                        <span>✓</span> See sales in real-time
+                    </div>
                 </div>
                 
-                <!-- Main CTA Button (same as header) -->
+                <!-- TOUR SECTION - One-click demo login -->
+                <div class="tour-section-compact">
+                    <p class="tour-title">🔍 Want to see inside first?</p>
+                    <button id="tour-demo-btn" class="tour-btn">
+                        👆 Try Demo Shop
+                    </button>
+                    <p class="tour-note">No signup • Instant access</p>
+                </div>
+                
+                <!-- Main CTA Button -->
                 <button class="btn-main-cta" id="google-signin-btn-mobile">
                     Start Free Forever
                 </button>
-                
-                <!-- ===== STRATEGICALLY PLACED DEMO SECTION ===== -->
-                <!-- This looks like a feature, not an afterthought -->
-                <div class="demo-quick-access">
-                    <div class="demo-divider">
-                        <span class="demo-divider-text">or try before signing up</span>
-                    </div>
-                    
-                    <div class="demo-credentials-compact">
-                        <div class="demo-credential-item">
-                            <span class="demo-label">📧 Demo:</span>
-                            <code class="demo-value">superkeeper35@gmail.com</code>
-                        </div>
-                        <div class="demo-credential-item">
-                            <span class="demo-label">🔑 Pass:</span>
-                            <code class="demo-value">SUPAKIPA@123</code>
-                        </div>
-                    </div>
-                    
-                    <div class="demo-support-row">
-                        <a href="https://wa.me/2540114932232?text=Hi%20I'm%20trying%20Superkeeper%20demo" 
-                           class="demo-whatsapp-link" 
-                           target="_blank">
-                            <span>📱</span> WhatsApp
-                        </a>
-                        <a href="mailto:superkeeper35@gmail.com?subject=Demo%20Help" 
-                           class="demo-email-link"
-                           target="_blank">
-                            <span>✉️</span> Email
-                        </a>
-                    </div>
-                    
-                    <p class="demo-note">
-                        <span class="demo-note-icon">🔍</span>
-                        Demo account is shared - please be kind! 
-                        <span class="demo-note-hover">(don't change password)</span>
-                    </p>
-                </div>
-                <!-- ===== END DEMO SECTION ===== -->
                 
                 <p class="note">No credit card • Setup in 5 minutes</p>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Staff Login Container (for staffLogin.js) -->
+<div id="staff-login-container" style="display: none;"></div>
+
+<!-- CONSTRUCTION BANNER -->
+<div class="construction-banner">
+    <div class="construction-content">
+        <span class="construction-icon">🚧</span>
+        <span class="construction-text">Website Under Construction - Actively Building!</span>
+        <span class="construction-icon">🏗️</span>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
-<!-- DEBUG SCRIPT - Helps identify issues -->
-<script>
+<!-- IMPORT LOGIN FILES FIRST -->
+<script type="module" src="{{ url_for('static', filename='js/login.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/staffLogin.js') }}"></script>
+<!-- IMPORT TOUR LOGIN -->
+<script type="module" src="{{ url_for('static', filename='js/tourLogin.js') }}"></script>
+
+<!-- STYLING AND HANDLERS -->
+<script type="module">
+// Import tour login function
+import { handleDemoLogin } from "{{ url_for('static', filename='js/tourLogin.js') }}";
+
+// Apply styles after DOM is ready
 document.addEventListener("DOMContentLoaded", function() {
-    console.log("🔍 DEBUG: Homepage loaded");
+    console.log("🔍 Homepage loaded - applying styles");
     
-    // Check if button exists
-    const button = document.getElementById("google-signin-btn");
-    console.log("✅ Button exists:", !!button);
-    console.log("📝 Button details:", button);
+    // Get button references
+    const googleBtn = document.getElementById('google-signin-btn');
+    const staffBtn = document.getElementById('staff-signin-btn');
+    const mobileBtn = document.getElementById('google-signin-btn-mobile');
+    const tourBtn = document.getElementById('tour-demo-btn');
     
-    if (button) {
-        // Add a test click handler
-        button.addEventListener("click", function() {
-            console.log("🟢 DEBUG: Button clicked - basic click works!");
+    // Style Google button
+    if (googleBtn) {
+        googleBtn.style.cssText = `
+            flex: 1;
+            padding: 10px 4px;
+            border-radius: 40px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            color: #333;
+            border: 1px solid #ddd;
+            gap: 4px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        `;
+        
+        // Add G icon if not present
+        if (!googleBtn.querySelector('.btn-icon')) {
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'btn-icon';
+            iconSpan.style.cssText = `
+                background: #4285F4;
+                color: white;
+                width: 20px;
+                height: 20px;
+                border-radius: 50%;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                font-weight: bold;
+                margin-right: 4px;
+            `;
+            iconSpan.textContent = 'G';
+            googleBtn.prepend(iconSpan);
+        }
+    }
+    
+    // Style staff button - preserve original click handler
+    if (staffBtn) {
+        staffBtn.style.cssText = `
+            flex: 1;
+            padding: 10px 4px;
+            border-radius: 40px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            box-shadow: 0 4px 10px rgba(102,126,234,0.3);
+        `;
+        
+        console.log("✅ Staff button styled - original click handler preserved");
+    }
+    
+    // TOUR BUTTON - One-click demo login
+    if (tourBtn) {
+        tourBtn.addEventListener('click', async function(e) {
+            e.preventDefault();
+            console.log("🔍 Tour button clicked - starting demo login");
+            
+            // Show loading state
+            const originalText = this.textContent;
+            this.textContent = "⏳ Loading demo...";
+            this.disabled = true;
+            
+            try {
+                // Call the imported demo login function
+                await handleDemoLogin();
+                // If successful, redirect happens in the function
+                
+            } catch (error) {
+                console.error("❌ Demo login failed:", error);
+                
+                // Reset button if login failed (if not redirected)
+                setTimeout(() => {
+                    this.textContent = originalText;
+                    this.disabled = false;
+                }, 2000);
+            }
+        });
+        
+        // Hover effect
+        tourBtn.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-1px)';
+            this.style.boxShadow = '0 4px 12px rgba(255,193,7,0.4)';
+        });
+        
+        tourBtn.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+            this.style.boxShadow = '0 2px 6px rgba(255,193,7,0.3)';
         });
     }
 
-    // Copy demo credentials on click (nice UX touch)
-    const demoValues = document.querySelectorAll('.demo-value');
-    demoValues.forEach(el => {
-        el.addEventListener('click', function() {
-            navigator.clipboard.writeText(this.textContent);
-            
-            // Show temporary tooltip
-            const originalText = this.textContent;
-            const tooltip = document.createElement('span');
-            tooltip.textContent = '✓ Copied!';
-            tooltip.style.cssText = `
-                position: absolute;
-                background: #10b981;
-                color: white;
-                padding: 2px 8px;
-                border-radius: 4px;
-                font-size: 12px;
-                margin-left: 8px;
-            `;
-            this.parentNode.appendChild(tooltip);
-            setTimeout(() => tooltip.remove(), 1000);
+    // Mobile button - triggers Google login
+    if (mobileBtn && googleBtn) {
+        mobileBtn.addEventListener('click', function() {
+            googleBtn.click();
         });
-    });
-});
-</script>
-
-<!-- Import your login.js file -->
-<script type="module" src="{{ url_for('static', filename='js/login.js') }}"></script>
-<script type="module" src="{{ url_for('static', filename='js/staffLogin.js') }}"></script>
-
-<!-- Your existing JavaScript with fixes -->
-<script>
-// Wait for DOM to be fully loaded
-document.addEventListener('DOMContentLoaded', function() {
-    console.log("🎨 Setting up animations...");
+    }
     
-    // Fix logo animation - check if element exists first
+    // Logo animation
     let logo = document.getElementById('logoPulse');
-    
     if (logo) {
-        console.log("✅ Logo element found, starting animation");
         let beatCount = 0;
         const logos = ['SK', '📱', '📦', '💰', '👥', '📊', '✓', '🚀'];
-
         setInterval(() => {
             logo.textContent = logos[beatCount % logos.length];
             logo.style.transform = 'scale(1.05)';
             setTimeout(() => logo.style.transform = 'scale(1)', 100);
             beatCount++;
         }, 857);
-    } else {
-        console.warn("⚠️ Logo element not found for animation");
     }
-
-    // Make mobile button also trigger Google login
-    const mobileBtn = document.getElementById('google-signin-btn-mobile');
-    if (mobileBtn) {
-        console.log("✅ Mobile button found");
-        mobileBtn.addEventListener('click', function() {
-            console.log("📱 Mobile button clicked");
-            // Trigger the Google button click
-            const googleBtn = document.getElementById('google-signin-btn');
-            if (googleBtn) {
-                console.log("🔄 Triggering Google button click");
-                googleBtn.click();
-            }
-        });
-    } else {
-        console.warn("⚠️ Mobile button not found");
-    }
-    
-    console.log("🎯 Homepage setup complete");
 });
 </script>
 
+<!-- Keep all your existing styles - they're perfect! -->
 <style>
-/* COMPACT HOMEPAGE - FITS ON SCREEN */
+/* ============================================= */
+/* MOBILE FIRST - PERFECT FIT HOMEPAGE          */
+/* ============================================= */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f8fafc;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* MAIN CONTENT */
+main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* HOMEPAGE CONTAINER */
 .compact-homepage {
-    height: calc(100vh - 120px); /* Leave space for footer ribbon */
+    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 4rem 1rem 1rem;
+    padding: 8px;
     background: white;
-    overflow: hidden; /* Prevent scrolling */
 }
 
-/* Compact container */
+/* MAIN CARD */
 .compact-container {
     width: 100%;
-    max-width: 1000px; /* Smaller than before */
-    border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    padding: 1.5rem; /* Less padding */
+    max-width: 500px;
+    margin: 0 auto;
     background: white;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    border-radius: 24px;
+    padding: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+    border: 1px solid #f1f5f9;
 }
 
-/* COMPACT HEADER - Single Button on Right */
+/* HEADER WITH TWO BUTTONS */
 .compact-header {
-    display: flex;
-    justify-content: flex-end; /* Button to the right */
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid #f1f5f9;
+    margin-bottom: 12px;
 }
 
 .header-buttons {
     display: flex;
-    align-items: center;
-}
-
-.btn-start {
-    background: #3b82f6;
-    color: white;
-    border: none;
-    padding: 0.6rem 1.2rem;
-    font-size: 0.9rem;
-    border-radius: 0.5rem;
-    cursor: pointer;
-    font-weight: 600;
-    transition: all 0.2s;
-}
-
-.btn-start:hover {
-    background: #2563eb;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
-}
-
-/* Compact navigation */
-.compact-nav {
-    display: flex;
+    gap: 8px;
     justify-content: center;
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
+    width: 100%;
+}
+
+/* NAVIGATION */
+.compact-nav {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
     border-bottom: 1px solid #f1f5f9;
 }
 
 .compact-nav nav {
     display: flex;
-    gap: 1.5rem; /* Smaller gap */
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
 .compact-nav a {
+    color: #64748b;
     text-decoration: none;
-    color: #475569;
-    font-size: 0.85rem; /* Smaller font */
+    font-size: 12px;
     font-weight: 500;
-    padding: 0.25rem 0;
-    transition: color 0.2s;
+    padding: 4px 0;
 }
 
 .compact-nav a:hover {
     color: #3b82f6;
 }
 
-/* Compact content layout */
+/* CONTENT LAYOUT */
 .compact-content {
     display: flex;
+    gap: 12px;
     align-items: center;
-    gap: 3rem; /* Less gap */
-    padding: 0.5rem;
 }
 
-/* Compact logo */
+/* LOGO */
 .compact-logo {
-    flex: 1;
+    flex: 0 0 auto;
+    width: 90px;
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 200px; /* Smaller */
 }
 
 .logo-pulse {
-    font-size: 6rem; /* Smaller */
+    font-size: 3.5rem;
     font-weight: 800;
     color: #3b82f6;
     transition: transform 0.2s;
@@ -309,313 +348,237 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 @keyframes gentle-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.9; }
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.9; transform: scale(1.02); }
 }
 
-/* Compact text */
+/* TEXT CONTENT */
 .compact-text {
     flex: 1;
-    max-width: 450px; /* Smaller */
+    min-width: 0;
 }
 
 .compact-text h1 {
-    font-size: 2.5rem; /* Smaller */
-    margin: 0 0 0.5rem 0;
-    color: #1e293b;
-    line-height: 1.1;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 2px 0;
+    line-height: 1.2;
 }
 
 .compact-text .tagline {
-    font-size: 1rem; /* Smaller */
+    font-size: 0.8rem;
     color: #64748b;
-    margin-bottom: 1.5rem;
-    line-height: 1.5;
+    margin-bottom: 8px;
 }
 
-.compact-text .benefit {
+/* BENEFITS */
+.benefits-compact {
+    margin-bottom: 8px;
+}
+
+.benefit {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.75rem;
-    font-size: 1rem; /* Smaller */
-    color: #475569;
+    gap: 4px;
+    margin-bottom: 4px;
+    font-size: 0.85rem;
+    color: #334155;
 }
 
-.compact-text .benefit span {
+.benefit span {
     color: #10b981;
     font-weight: bold;
+    font-size: 0.9rem;
 }
 
-/* Main CTA Button */
+/* TOUR SECTION */
+.tour-section-compact {
+    background: #fef9e7;
+    border: 2px solid #ffc107;
+    border-radius: 30px;
+    padding: 6px 10px;
+    margin: 8px 0;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.tour-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #856404;
+    margin: 0;
+}
+
+.tour-btn {
+    background: #ffc107;
+    color: #1e293b;
+    border: none;
+    padding: 5px 12px;
+    border-radius: 30px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(255,193,7,0.3);
+    white-space: nowrap;
+    transition: all 0.2s;
+}
+
+.tour-btn:hover {
+    background: #ffca2c;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255,193,7,0.4);
+}
+
+.tour-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.tour-note {
+    font-size: 0.65rem;
+    color: #856404;
+    margin: 0;
+    width: 100%;
+    text-align: center;
+}
+
+/* MAIN CTA BUTTON */
 .btn-main-cta {
     background: #3b82f6;
     color: white;
     border: none;
-    padding: 0.85rem 2rem;
-    font-size: 1.1rem;
-    border-radius: 0.5rem;
-    margin: 1.5rem 0 0.75rem 0;
-    cursor: pointer;
-    width: 100%;
+    padding: 10px 14px;
+    font-size: 0.95rem;
     font-weight: 600;
+    border-radius: 40px;
+    width: 100%;
+    cursor: pointer;
+    margin: 6px 0 2px 0;
+    box-shadow: 0 4px 12px rgba(59,130,246,0.3);
     transition: all 0.2s;
 }
 
 .btn-main-cta:hover {
     background: #2563eb;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
 }
 
-/* ===== NEW DEMO SECTION STYLES ===== */
-.demo-quick-access {
-    margin: 1rem 0 0.5rem 0;
-    padding: 0.75rem;
-    background: #f8fafc;
-    border-radius: 0.5rem;
-    border: 1px solid #e2e8f0;
-}
-
-.demo-divider {
-    position: relative;
-    text-align: center;
-    margin-bottom: 0.75rem;
-}
-
-.demo-divider::before {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: #e2e8f0;
-    z-index: 1;
-}
-
-.demo-divider-text {
-    position: relative;
-    z-index: 2;
-    background: #f8fafc;
-    padding: 0 0.75rem;
-    color: #64748b;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.demo-credentials-compact {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.375rem;
-    padding: 0.5rem;
-    margin-bottom: 0.75rem;
-    font-size: 0.85rem;
-}
-
-.demo-credential-item {
-    display: flex;
-    align-items: center;
-    padding: 0.25rem 0;
-    border-bottom: 1px dashed #f1f5f9;
-}
-
-.demo-credential-item:last-child {
-    border-bottom: none;
-}
-
-.demo-label {
-    width: 65px;
-    color: #64748b;
-    font-weight: 500;
-}
-
-.demo-value {
-    font-family: monospace;
-    background: #f1f5f9;
-    padding: 0.2rem 0.5rem;
-    border-radius: 0.25rem;
-    color: #0f172a;
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: background 0.2s;
-    user-select: all;
-}
-
-.demo-value:hover {
-    background: #e2e8f0;
-}
-
-.demo-support-row {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-}
-
-.demo-whatsapp-link, .demo-email-link {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.25rem;
-    padding: 0.4rem;
-    border-radius: 0.375rem;
-    font-size: 0.8rem;
-    text-decoration: none;
-    font-weight: 500;
-    transition: all 0.2s;
-}
-
-.demo-whatsapp-link {
-    background: #25D366;
-    color: white;
-}
-
-.demo-whatsapp-link:hover {
-    background: #20bd5a;
-    transform: translateY(-1px);
-}
-
-.demo-email-link {
-    background: #3b82f6;
-    color: white;
-}
-
-.demo-email-link:hover {
-    background: #2563eb;
-    transform: translateY(-1px);
-}
-
-.demo-note {
-    font-size: 0.7rem;
-    color: #64748b;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.25rem;
-    margin: 0.25rem 0 0 0;
-}
-
-.demo-note-hover {
-    opacity: 0.7;
-    font-style: italic;
-}
-
-.compact-text .note {
-    font-size: 0.75rem; /* Smaller */
+.note {
+    font-size: 0.65rem;
     color: #94a3b8;
     text-align: center;
-    margin: 0.5rem 0 0 0;
+    margin: 0;
+    line-height: 1.2;
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    .compact-homepage {
-        height: calc(100vh - 100px);
-        padding: 5rem 0.5rem 0.5rem;
-    }
-    
+/* CONSTRUCTION BANNER */
+.construction-banner {
+    background: repeating-linear-gradient(
+        45deg,
+        #000000,
+        #000000 20px,
+        #ffd700 20px,
+        #ffd700 40px
+    );
+    padding: 6px 10px;
+    text-align: center;
+    border-top: 2px solid #ffd700;
+    flex-shrink: 0;
+}
+
+.construction-content {
+    background: rgba(0,0,0,0.85);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 40px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border: 1px solid #ffd700;
+    max-width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.construction-icon {
+    font-size: 0.8rem;
+}
+
+/* RESPONSIVE */
+@media (max-width: 480px) {
     .compact-container {
-        border: none;
-        padding: 1rem;
-        box-shadow: none;
-        max-width: 100%;
+        padding: 12px;
     }
     
     .compact-content {
-        flex-direction: column;
-        gap: 1.5rem;
-        text-align: center;
+        gap: 8px;
     }
     
     .compact-logo {
-        min-height: 150px;
+        width: 70px;
     }
     
     .logo-pulse {
-        font-size: 4rem;
-    }
-    
-    .compact-nav nav {
-        gap: 1rem;
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-    
-    .compact-nav a {
-        font-size: 0.8rem;
+        font-size: 3rem;
     }
     
     .compact-text h1 {
-        font-size: 2rem;
+        font-size: 1.4rem;
     }
     
-    /* Center header button on mobile */
-    .compact-header {
-        justify-content: center;
-    }
-    
-    .header-buttons {
-        width: 100%;
-    }
-    
-    .btn-start {
-        width: 100%;
-        max-width: 300px;
-        padding: 0.75rem;
-        font-size: 1rem;
-    }
-    
-    .demo-credentials-compact {
-        text-align: left;
-    }
-    
-    .site-footer {
-        padding: 0.5rem !important;
-        font-size: 0.7rem;
-    }
-    
-    .footer-bottom {
+    .tour-section-compact {
         flex-direction: column;
-        gap: 0.25rem;
-        text-align: center;
+        padding: 8px;
+    }
+    
+    .tour-title {
+        white-space: normal;
+    }
+    
+    .tour-btn {
+        width: 100%;
     }
 }
 
 @media (max-height: 700px) {
-    /* For shorter screens */
-    .compact-homepage {
-        height: calc(100vh - 80px);
-        padding: 4rem 0.5rem 0.5rem;
-    }
-    
     .compact-container {
-        padding: 1rem;
+        padding: 10px;
     }
     
     .compact-logo {
-        min-height: 120px;
+        width: 60px;
     }
     
     .logo-pulse {
-        font-size: 4rem;
+        font-size: 2.5rem;
     }
     
     .compact-text h1 {
-        font-size: 1.8rem;
+        font-size: 1.3rem;
     }
     
-    .compact-text .benefit {
-        margin-bottom: 0.5rem;
+    .benefit {
+        margin-bottom: 2px;
+        font-size: 0.8rem;
+    }
+    
+    .tour-section-compact {
+        margin: 4px 0;
+        padding: 4px 8px;
+    }
+    
+    .btn-main-cta {
+        padding: 8px 12px;
+        margin: 4px 0 2px;
         font-size: 0.9rem;
-    }
-    
-    .demo-quick-access {
-        padding: 0.5rem;
-        margin: 0.5rem 0;
     }
 }
 </style>
-
 {% endblock %}

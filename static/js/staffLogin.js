@@ -27,8 +27,6 @@ const ACTIVE_SHOP_NAME_KEY = "activeShopName";
 // ----------------------------
 function clearStaffSession() {
   localStorage.removeItem(STAFF_CTX_KEY);
-
-  // Optional legacy cleanup (from your old attempt)
   localStorage.removeItem("isStaff");
   localStorage.removeItem("shopId");
   localStorage.removeItem("ownerUid");
@@ -49,53 +47,66 @@ function setStaffSession(staffCtx) {
 }
 
 // ============================================
-// 1) INJECT STAFF LOGIN BUTTON ON HOME PAGE
+// 1) SETUP STAFF LOGIN BUTTON ON HOME PAGE
 // ============================================
-function injectStaffLoginButton() {
-  const googleSignInBtn = document.getElementById("google-signin-btn");
-
-  if (!googleSignInBtn) {
-    console.error("❌ Google Sign-In button not found");
-    return;
+function setupStaffLoginButton() {
+  // Try to find existing button first
+  let staffBtn = document.getElementById('staff-signin-btn');
+  
+  // If button doesn't exist, create it
+  if (!staffBtn) {
+    console.log("🔧 Staff button not found, creating new one");
+    const googleSignInBtn = document.getElementById("google-signin-btn");
+    
+    if (!googleSignInBtn) {
+      console.error("❌ Google Sign-In button not found");
+      return;
+    }
+    
+    staffBtn = document.createElement("button");
+    staffBtn.id = "staff-signin-btn";
+    staffBtn.innerHTML = `<span>Staff Log In</span>`;
+    
+    staffBtn.style.cssText = `
+      margin-top: 15px;
+      padding: 12px 24px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+      width: 100%;
+      max-width: 300px;
+    `;
+    
+    staffBtn.addEventListener("mouseenter", () => {
+      staffBtn.style.transform = "translateY(-2px)";
+      staffBtn.style.boxShadow = "0 6px 20px rgba(102, 126, 234, 0.6)";
+    });
+    
+    staffBtn.addEventListener("mouseleave", () => {
+      staffBtn.style.transform = "translateY(0)";
+      staffBtn.style.boxShadow = "0 4px 15px rgba(102, 126, 234, 0.4)";
+    });
+    
+    googleSignInBtn.parentNode.insertBefore(staffBtn, googleSignInBtn.nextSibling);
+    console.log("✅ Staff Login button created");
+  } else {
+    console.log("✅ Found existing staff button, will attach handler");
   }
-
-  // Prevent double-injection
-  if (document.getElementById("staff-signin-btn")) return;
-
-  const staffLoginBtn = document.createElement("button");
-  staffLoginBtn.id = "staff-signin-btn";
-  staffLoginBtn.innerHTML = `<span>Staff Log In</span>`;
-
-  staffLoginBtn.style.cssText = `
-    margin-top: 15px;
-    padding: 12px 24px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 16px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-    width: 100%;
-    max-width: 300px;
-  `;
-
-  staffLoginBtn.addEventListener("mouseenter", () => {
-    staffLoginBtn.style.transform = "translateY(-2px)";
-    staffLoginBtn.style.boxShadow = "0 6px 20px rgba(102, 126, 234, 0.6)";
-  });
-
-  staffLoginBtn.addEventListener("mouseleave", () => {
-    staffLoginBtn.style.transform = "translateY(0)";
-    staffLoginBtn.style.boxShadow = "0 4px 15px rgba(102, 126, 234, 0.4)";
-  });
-
-  staffLoginBtn.addEventListener("click", handleStaffLogin);
-
-  googleSignInBtn.parentNode.insertBefore(staffLoginBtn, googleSignInBtn.nextSibling);
-  console.log("✅ Staff Login button injected successfully");
+  
+  // Remove any existing click handlers and add ours
+  // Clone and replace to remove all previous handlers
+  const newStaffBtn = staffBtn.cloneNode(true);
+  staffBtn.parentNode.replaceChild(newStaffBtn, staffBtn);
+  
+  // Add our click handler
+  newStaffBtn.addEventListener("click", handleStaffLogin);
+  console.log("✅ Click handler attached to staff button");
 }
 
 // ============================================
@@ -105,11 +116,9 @@ async function handleStaffLogin() {
   console.log("🔐 Staff login initiated...");
 
   const provider = new GoogleAuthProvider();
-  // Optional: forces account chooser each time
   provider.setCustomParameters({ prompt: "select_account" });
 
   try {
-    // IMPORTANT: clear old staff session before starting a new one
     clearStaffSession();
 
     const result = await signInWithPopup(auth, provider);
@@ -124,13 +133,11 @@ async function handleStaffLogin() {
 
     console.log("👤 User signed in:", email);
 
-    // 3) Verify user is staff
     const staffData = await findStaffByEmail(email);
 
     if (!staffData) {
       console.log("❌ Email not found in staff database");
       alert("Access Denied: You are not registered as a staff member. Please contact your shop owner.");
-
       await signOut(auth);
       clearStaffSession();
       return;
@@ -138,38 +145,25 @@ async function handleStaffLogin() {
 
     console.log("✅ Staff verified:", staffData);
 
-    // 4) Store staff context (ONLY staff keys; do not write owner keys)
     const staffContext = {
-      // auth
       uid: user.uid,
       email,
-
-      // staff
       staffId: staffData.staffId,
       name: staffData.name || user.displayName || "",
       phone: staffData.phone || "",
       roleName: staffData.roleName || "",
       accessLevel: staffData.accessLevel ?? null,
-
-      // shop
       shopId: staffData.shopId,
       shopName: staffData.shopName || "",
-
-      // optional metadata
       staffDocPath: staffData.staffDocPath || ""
     };
 
     setStaffSession(staffContext);
-
     console.log("💾 staffContext saved:", staffContext);
-
-    // 5) Redirect
     window.location.href = "/dashboard";
   } catch (error) {
     console.error("❌ Staff login error:", error);
-
     if (error?.code === "auth/popup-closed-by-user") return;
-
     alert("Login failed: " + (error?.message || "Unknown error"));
   }
 }
@@ -179,22 +173,16 @@ async function handleStaffLogin() {
 // ============================================
 async function findStaffByEmail(email) {
   console.log("🔍 Searching staff via collectionGroup for:", email);
-
-  // NOTE: this requires staff docs to be under Shops/{shopId}/staff/{staffId}
   const q = query(collectionGroup(db, "staff"), where("email", "==", email));
   const snap = await getDocs(q);
 
   if (snap.empty) return null;
 
-  // If an email exists under multiple shops, we use the first match
   const staffDoc = snap.docs[0];
   const staff = staffDoc.data();
-
-  // staffDoc.ref.path => Shops/{shopId}/staff/{staffId}
   const shopId = staffDoc.ref.parent.parent.id;
   const staffId = staffDoc.id;
 
-  // Prefer shop document name, fallback to staff.shopName
   let shopName = staff.shopName || "Unknown Shop";
   try {
     const shopSnap = await getDoc(doc(db, "Shops", shopId));
@@ -203,7 +191,7 @@ async function findStaffByEmail(email) {
       shopName = shopData.shopName || shopData.name || shopName;
     }
   } catch (e) {
-    // ignore, fallback already set
+    // ignore
   }
 
   return {
@@ -226,9 +214,8 @@ async function findStaffByEmail(email) {
 // ============================================
 document.addEventListener("DOMContentLoaded", () => {
   console.log("📄 staffLogin.js loaded");
-
   if (window.location.pathname === "/" || window.location.pathname === "/index.html") {
-    injectStaffLoginButton();
+    setupStaffLoginButton(); // Changed from injectStaffLoginButton
   }
 });
 

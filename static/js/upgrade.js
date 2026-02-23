@@ -1,5 +1,6 @@
 // upgrade.js - Upgrade Management System with M-Pesa Payment
 // Shows upgrade modal when staff limit is reached and collects M-Pesa payments
+// NOW INJECTS: Plan banner directly into navbar for instant upgrade visibility
 
 import { db } from "./firebase-config.js";
 import { 
@@ -14,11 +15,13 @@ import {
   collection,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
 console.log("✅ upgrade.js loaded");
 
 let currentShopId = null;
+let currentPlan = null;
+let currentStaffCount = 0;
 
 // ======================================================
 // PLAN DEFINITIONS
@@ -86,6 +89,187 @@ const UPGRADE_PATHS = {
   ENTERPRISE: []
 };
 
+// ======================================================
+// INJECT PLAN BANNER INTO NAVBAR
+// ======================================================
+async function injectPlanBanner() {
+  console.log("🏷️ Injecting plan banner into navbar");
+  
+  // Wait for navbar to be ready
+  const navbar = document.querySelector('.navbar');
+  if (!navbar) {
+    console.log("⏳ Navbar not found, will retry");
+    setTimeout(injectPlanBanner, 500);
+    return;
+  }
+  
+  // Remove existing banner if any
+  const existingBanner = document.getElementById('plan-banner-container');
+  if (existingBanner) existingBanner.remove();
+  
+  // Create banner container
+  const bannerContainer = document.createElement('div');
+  bannerContainer.id = 'plan-banner-container';
+  bannerContainer.style.cssText = `
+    background: linear-gradient(135deg, #1e293b, #0f172a);
+    border-bottom: 1px solid #334155;
+    padding: 0;
+    font-size: 13px;
+  `;
+  
+  // Insert after navbar
+  navbar.parentNode.insertBefore(bannerContainer, navbar.nextSibling);
+  
+  // Load plan data and render
+  await loadPlanData();
+  renderPlanBanner(bannerContainer);
+}
+
+// ======================================================
+// LOAD PLAN DATA
+// ======================================================
+async function loadPlanData() {
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (!user) return;
+  
+  // Get shop ID (works for both owner and staff)
+  let shopId = user.uid;
+  const sessionType = localStorage.getItem("sessionType");
+  
+  if (sessionType === "staff") {
+    try {
+      const staffContext = JSON.parse(localStorage.getItem("staffContext") || "{}");
+      if (staffContext.shopId) shopId = staffContext.shopId;
+    } catch (e) {}
+  }
+  
+  currentShopId = shopId;
+  
+  try {
+    // Load plan
+    const planRef = doc(db, "Shops", shopId, "plan", "default");
+    const planSnap = await getDoc(planRef);
+    
+    if (planSnap.exists()) {
+      currentPlan = planSnap.data();
+    } else {
+      currentPlan = { name: "SOLO", staffLimit: 0 };
+    }
+    
+    // Get staff count
+    const staffRef = collection(db, "Shops", shopId, "staff");
+    const staffSnap = await getDocs(staffRef);
+    currentStaffCount = staffSnap.size;
+    
+    console.log(`📊 Plan loaded: ${currentPlan.name}, Staff: ${currentStaffCount}/${currentPlan.staffLimit || 0}`);
+    
+  } catch (error) {
+    console.error("❌ Error loading plan data:", error);
+    currentPlan = { name: "SOLO", staffLimit: 0 };
+    currentStaffCount = 0;
+  }
+}
+
+// ======================================================
+// RENDER PLAN BANNER (MORE NOTICEABLE BUT STILL CLEAN)
+// ======================================================
+function renderPlanBanner(container) {
+  const planName = currentPlan?.name || "SOLO";
+  const staffLimit = currentPlan?.staffLimit || 0;
+  const isSolo = planName === "SOLO";
+  
+  // Get plan color
+  const planColor = PLANS[planName]?.color || (isSolo ? "#6B7280" : "#3B82F6");
+  
+  container.innerHTML = `
+    <div style="
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      border-bottom: 2px solid ${planColor}60;
+      padding: 12px 24px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    ">
+      <div style="
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        max-width: 1200px;
+        margin: 0 auto;
+        color: white;
+      ">
+        <!-- Left: Plan badge with usage -->
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <div style="
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: ${planColor}20;
+            padding: 6px 14px;
+            border-radius: 40px;
+            border: 1px solid ${planColor}60;
+          ">
+            <span style="font-size: 18px;">${PLANS[planName]?.icon || '👤'}</span>
+            <span style="
+              font-weight: 700;
+              color: ${planColor};
+              font-size: 14px;
+            ">${planName}</span>
+          </div>
+          
+          <div style="
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.05);
+            padding: 6px 14px;
+            border-radius: 40px;
+          ">
+            <span style="color: #94a3b8;">👥</span>
+            <span style="font-weight: 600; color: white; font-size: 14px;">
+              ${isSolo ? 'Owner only' : `${currentStaffCount}/${staffLimit} staff`}
+            </span>
+          </div>
+        </div>
+        
+        <!-- Right: Upgrade CTA -->
+        <button id="quick-upgrade-btn" style="
+          background: linear-gradient(135deg, ${planColor}, ${planColor}CC);
+          color: white;
+          border: none;
+          padding: 8px 20px;
+          border-radius: 40px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          box-shadow: 0 4px 12px ${planColor}40;
+          transition: all 0.2s;
+        "
+        onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px ${planColor}60'"
+        onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px ${planColor}40'">
+          <span>🚀</span>
+          <span>${isSolo ? 'Add Staff Members' : 'Upgrade Plan'}</span>
+        </button>
+      </div>
+    </div>
+  `;
+  
+  // Add click handler
+  document.getElementById('quick-upgrade-btn')?.addEventListener('click', () => {
+    if (typeof window.showUpgradeModal === 'function') {
+      window.showUpgradeModal(planName, isSolo ? "Add staff members" : "Upgrade your plan");
+    } else {
+      // Fallback to settings
+      document.getElementById('settings-btn')?.click();
+      setTimeout(() => {
+        const staffMenuItem = document.querySelector('[data-action="staff"]');
+        if (staffMenuItem) staffMenuItem.click();
+      }, 500);
+    }
+  });
+}
 // ======================================================
 // CHECK FOR PENDING UPGRADE REQUESTS
 // ======================================================
@@ -377,7 +561,7 @@ async function showPendingRequestsModal() {
             Need help with your upgrade request?
           </div>
           <div style="font-size: 13px; color: #999;">
-            Contact support at support@yourbusiness.com or call +254 700 000 000
+            Contact support at supereeper35@gmail.com or call +254114932232
           </div>
         </div>
       </div>
@@ -436,6 +620,8 @@ async function cancelUpgradeRequest(requestId, planName) {
     
     // Close modal and refresh
     closePendingRequestsModal();
+    loadPlanData(); // Refresh banner
+    renderPlanBanner(document.getElementById('plan-banner-container'));
     
   } catch (error) {
     console.error("❌ Error cancelling upgrade request:", error);
@@ -1505,6 +1691,29 @@ function showToast(message, type = 'success') {
     }, 300);
   }, 3000);
 }
+
+// ======================================================
+// INITIALIZE ON AUTH CHANGE
+// ======================================================
+function init() {
+  const auth = getAuth();
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      // Inject banner when user logs in
+      setTimeout(injectPlanBanner, 500);
+      
+      // Also inject when settings button is clicked (for plan updates)
+      document.addEventListener('plan-updated', () => {
+        loadPlanData();
+        const container = document.getElementById('plan-banner-container');
+        if (container) renderPlanBanner(container);
+      });
+    }
+  });
+}
+
+// Call init
+init();
 
 // ======================================================
 // EXPORT FUNCTIONS

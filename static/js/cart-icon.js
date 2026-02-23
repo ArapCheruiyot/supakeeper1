@@ -1,4 +1,6 @@
 // cart-icon.js - SMART CART SYSTEM WITH FRONTEND SALE PROCESSING
+// FIXED: Added proper staff handling, undefined value checks, and bilingual support
+// ENHANCED: Added multi-payment method selection (Cash, M-Pesa, Card) with split payments
 
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { db } from "./firebase-config.js";
@@ -16,6 +18,11 @@ import {
 // ====================================================
 let cart = [];
 let currentShopId = null;
+
+// Payment tracking
+let selectedPaymentMethods = [];
+let paymentSplit = { cash: 0, mpesa: 0, card: 0 };
+let totalAmount = 0;
 
 // ====================================================
 // DEBUG UTILITIES
@@ -102,7 +109,7 @@ function updateCartIcon() {
         if (count > 0) {
             showCartReview();
         } else {
-            showNotification('Cart is empty! Add items first.', 'info', 2000);
+            showNotification('Cart is empty! Add items first. / Kikapu hakina bidhaa! Ongeza bidhaa kwanza.', 'info', 2000);
         }
     };
     
@@ -186,6 +193,41 @@ function addCartIconStyles() {
                 from { transform: translateY(20px); opacity: 0; }
                 to { transform: translateY(0); opacity: 1; }
             }
+            
+            /* Payment method styles */
+            .payment-option {
+                background: #f8f9fa;
+                border: 2px solid #e9ecef;
+                border-radius: 12px;
+                padding: 15px 8px;
+                text-align: center;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            
+            .payment-option.selected {
+                border-color: #3b82f6;
+                background: #eff6ff;
+            }
+            
+            .payment-option:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            }
+            
+            .split-input {
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #cbd5e1;
+                border-radius: 8px;
+                font-size: 14px;
+            }
+            
+            .split-input:focus {
+                outline: none;
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+            }
         `;
         document.head.appendChild(style);
     }
@@ -209,7 +251,7 @@ function addItemToCart(item) {
     const stock = item.real_available !== undefined ? item.real_available : item.batch_remaining;
     
     if (stock < qty && item.can_fulfill === false) {
-        showNotification(`❌ "${item.name}" is out of stock!`, 'error', 3000);
+        showNotification(`❌ "${item.name}" is out of stock! / "${item.name}" imeisha!`, 'error', 3000);
         return false;
     }
     
@@ -279,7 +321,7 @@ function addItemToCart(item) {
     if (existingIndex !== -1) {
         const newQuantity = cart[existingIndex].quantity + qty;
         if (stock < newQuantity) {
-            showNotification(`❌ Only ${stock - cart[existingIndex].quantity} available`, 'error', 3000);
+            showNotification(`❌ Only ${stock - cart[existingIndex].quantity} available / ${stock - cart[existingIndex].quantity} tu zipo`, 'error', 3000);
             return false;
         }
         cart[existingIndex].quantity = newQuantity;
@@ -293,13 +335,13 @@ function addItemToCart(item) {
     updateCartIcon();
     
     const itemName = cartItem.display_name || cartItem.name;
-    showNotification(`✅ Added ${itemName} to cart!`, 'success', 2000);
+    showNotification(`✅ Added ${itemName} to cart! / Umeongeza ${itemName} kwenye kikapu!`, 'success', 2000);
     
     return true;
 }
 
 // ====================================================
-// NOTIFICATION SYSTEM
+// NOTIFICATION SYSTEM (Bilingual)
 // ====================================================
 
 function showNotification(message, type = 'info', duration = 3000) {
@@ -373,7 +415,7 @@ function showCartReview() {
     debugLog('Showing smart cart review');
     
     if (cart.length === 0) {
-        showNotification('Cart is empty!', 'info', 2000);
+        showNotification('Cart is empty! / Kikapu hakina bidhaa!', 'info', 2000);
         return;
     }
     
@@ -398,7 +440,7 @@ function showCartReview() {
             ">
                 <h2 style="margin: 0; font-size: 24px; display: flex; align-items: center; gap: 10px;">
                     <span>🛒</span>
-                    <span>Your Cart (${getCartCount()} items)</span>
+                    <span>Your Cart / Kikapu Chako (${getCartCount()} items / vitu)</span>
                 </h2>
                 <button id="close-cart-btn" style="
                     background: rgba(255,255,255,0.2);
@@ -430,8 +472,8 @@ function showCartReview() {
                     
                     // Type indicator
                     const typeBadge = item.type === 'selling_unit' 
-                        ? `<span style="background:#9b59b6;color:white;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:8px;">Selling Unit</span>`
-                        : `<span style="background:#3498db;color:white;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:8px;">Base Item</span>`;
+                        ? `<span style="background:#9b59b6;color:white;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:8px;">Selling Unit / Kitengo</span>`
+                        : `<span style="background:#3498db;color:white;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:8px;">Base Item / Kikuu</span>`;
                     
                     // Batch info
                     const batchInfo = item.batch_name ? `
@@ -456,13 +498,13 @@ function showCartReview() {
                             border-radius: 4px;
                             display: inline-block;
                             margin-right: 8px;
-                        ">Auto-switched</div>
+                        ">Auto-switched / Imegeuzwa</div>
                     ` : '';
                     
                     // Stock info
                     const stockInfo = item.real_available !== undefined ? `
                         <div style="font-size:11px;color:#666;margin-top:2px;">
-                            Real stock: ${item.real_available.toFixed(2)}
+                            Real stock: ${item.real_available.toFixed(2)} / Stock halisi: ${item.real_available.toFixed(2)}
                         </div>
                     ` : '';
                     
@@ -543,7 +585,7 @@ function showCartReview() {
                     margin-bottom: 20px;
                 ">
                     <div>
-                        <div style="font-size: 14px; color: #666; margin-bottom: 4px;">Total Amount</div>
+                        <div style="font-size: 14px; color: #666; margin-bottom: 4px;">Total Amount / Jumla</div>
                         <div style="font-size: 32px; font-weight: 800; color: #333;">$${total.toFixed(2)}</div>
                     </div>
                     <button id="clear-all-btn" style="
@@ -555,7 +597,7 @@ function showCartReview() {
                         font-weight: 600;
                         cursor: pointer;
                         transition: all 0.2s;
-                    ">Clear All</button>
+                    ">Clear All / Futa Yote</button>
                 </div>
                 
                 <div style="display: flex; gap: 12px;">
@@ -570,7 +612,7 @@ function showCartReview() {
                         font-size: 16px;
                         cursor: pointer;
                         transition: background 0.2s;
-                    ">Continue Shopping</button>
+                    ">Continue Shopping / Endelea Kununua</button>
                     <button id="checkout-btn" style="
                         flex: 1;
                         padding: 16px;
@@ -582,7 +624,7 @@ function showCartReview() {
                         font-size: 16px;
                         cursor: pointer;
                         transition: transform 0.2s, box-shadow 0.2s;
-                    ">Proceed to Checkout →</button>
+                    ">Proceed to Checkout / Nenda Maliponi →</button>
                 </div>
             </div>
         </div>
@@ -608,12 +650,12 @@ function showCartReview() {
     document.getElementById('close-cart-btn').onclick = () => modalBackdrop.remove();
     
     document.getElementById('clear-all-btn').onclick = () => {
-        if (confirm('Clear all items from cart?')) {
+        if (confirm('Clear all items from cart? / Futa vitu vyote kwenye kikapu?')) {
             cart = [];
             saveCartToStorage();
             updateCartIcon();
             modalBackdrop.remove();
-            showNotification('Cart cleared!', 'success', 2000);
+            showNotification('Cart cleared! / Kikapu kimefutwa!', 'success', 2000);
         }
     };
     
@@ -630,13 +672,18 @@ function showCartReview() {
 }
 
 // ====================================================
-// PAYMENT MODAL
+// PAYMENT MODAL - ENHANCED WITH MULTI-PAYMENT OPTIONS
 // ====================================================
 
 function showPaymentModal() {
     debugLog('Showing payment modal');
     
     const total = getCartTotal();
+    totalAmount = total;
+    
+    // Reset payment selections
+    selectedPaymentMethods = [];
+    paymentSplit = { cash: 0, mpesa: 0, card: 0 };
     
     const existingModal = document.querySelector('.cart-modal-backdrop');
     if (existingModal) existingModal.remove();
@@ -654,50 +701,135 @@ function showPaymentModal() {
             ">
                 <h2 style="margin: 0; font-size: 24px; display: flex; align-items: center; justify-content: center; gap: 10px;">
                     <span>💳</span>
-                    <span>Complete Purchase</span>
+                    <span>Complete Purchase / Maliza Ununuzi</span>
                 </h2>
                 <div style="margin-top: 16px; font-size: 14px; opacity: 0.9;">
-                    Smart batch system ensures correct stock allocation
+                    Smart batch system ensures correct stock allocation / Mfumo mahiri unahakikisha ugawaji sahihi wa stock
                 </div>
             </div>
             
             <div style="padding: 24px;">
-                <div style="text-align: center; margin-bottom: 32px;">
-                    <div style="font-size: 14px; color: #666; margin-bottom: 8px;">Total Amount</div>
-                    <div style="font-size: 48px; font-weight: 800; color: #333; margin-bottom: 8px;">
+                <div style="text-align: center; margin-bottom: 24px;">
+                    <div style="font-size: 14px; color: #666; margin-bottom: 8px;">Total Amount / Jumla</div>
+                    <div style="font-size: 48px; font-weight: 800; color: #333; margin-bottom: 8px;" id="modal-total">
                         $${total.toFixed(2)}
                     </div>
                     <div style="color: #666; font-size: 14px;">
-                        ${cart.length} item${cart.length !== 1 ? 's' : ''} • Smart batch tracking
+                        ${cart.length} item${cart.length !== 1 ? 's' : ''} • Smart batch tracking / Ufuatiliaji mahiri
                     </div>
                 </div>
                 
-                <div style="margin-bottom: 24px;">
-                    <div style="font-weight: 600; color: #333; margin-bottom: 12px;">Payment Method</div>
-                    <div style="
-                        background: #f8f9fa;
-                        border: 2px solid #e9ecef;
-                        border-radius: 12px;
-                        padding: 16px;
-                        display: flex;
-                        align-items: center;
-                        gap: 12px;
-                    ">
-                        <div style="
-                            width: 40px;
-                            height: 40px;
-                            background: #2ed573;
-                            border-radius: 8px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            color: white;
-                            font-size: 20px;
-                        ">💰</div>
-                        <div>
-                            <div style="font-weight: 600; color: #333;">Cash</div>
-                            <div style="color: #666; font-size: 14px;">Pay with cash</div>
+                <!-- Payment Method Selection -->
+                <div style="margin-bottom: 20px;">
+                    <div style="font-weight: 600; color: #333; margin-bottom: 12px;">
+                        Payment Method / Njia ya Malipo
+                        <span style="font-size: 12px; color: #666; margin-left: 8px;">(Tap to select / Bonyeza kuchagua)</span>
+                    </div>
+                    
+                    <!-- Payment Method Grid -->
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
+                        <!-- Cash -->
+                        <div class="payment-option" data-method="cash" style="
+                            background: #f8f9fa;
+                            border: 2px solid #e9ecef;
+                            border-radius: 12px;
+                            padding: 15px 8px;
+                            text-align: center;
+                            cursor: pointer;
+                            transition: all 0.2s;
+                        ">
+                            <div style="font-size: 24px; margin-bottom: 5px;">💰</div>
+                            <div style="font-weight: 600; font-size: 14px;">Cash</div>
+                            <div style="font-size: 11px; color: #666;">Taslimu</div>
                         </div>
+                        
+                        <!-- M-Pesa / Phone -->
+                        <div class="payment-option" data-method="mpesa" style="
+                            background: #f8f9fa;
+                            border: 2px solid #e9ecef;
+                            border-radius: 12px;
+                            padding: 15px 8px;
+                            text-align: center;
+                            cursor: pointer;
+                            transition: all 0.2s;
+                        ">
+                            <div style="font-size: 24px; margin-bottom: 5px;">📱</div>
+                            <div style="font-weight: 600; font-size: 14px;">M-Pesa</div>
+                            <div style="font-size: 11px; color: #666;">Phone</div>
+                        </div>
+                        
+                        <!-- Card -->
+                        <div class="payment-option" data-method="card" style="
+                            background: #f8f9fa;
+                            border: 2px solid #e9ecef;
+                            border-radius: 12px;
+                            padding: 15px 8px;
+                            text-align: center;
+                            cursor: pointer;
+                            transition: all 0.2s;
+                        ">
+                            <div style="font-size: 24px; margin-bottom: 5px;">💳</div>
+                            <div style="font-weight: 600; font-size: 14px;">Card</div>
+                            <div style="font-size: 11px; color: #666;">Kadi</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Mixed Payment Section -->
+                    <div id="mixed-payment-section" style="
+                        background: #f0f9ff;
+                        border: 2px solid #3b82f6;
+                        border-radius: 12px;
+                        padding: 15px;
+                        margin-top: 10px;
+                        display: none;
+                    ">
+                        <div style="font-weight: 600; color: #1e293b; margin-bottom: 10px;">
+                            Split Payment / Gawanya Malipo
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 100px;">
+                                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Cash Amount</label>
+                                <input type="number" id="cash-amount" class="split-input" placeholder="0" min="0" value="0" step="0.01">
+                            </div>
+                            <div style="flex: 1; min-width: 100px;">
+                                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">M-Pesa Amount</label>
+                                <input type="number" id="mpesa-amount" class="split-input" placeholder="0" min="0" value="0" step="0.01">
+                            </div>
+                            <div style="flex: 1; min-width: 100px;">
+                                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Card Amount</label>
+                                <input type="number" id="card-amount" class="split-input" placeholder="0" min="0" value="0" step="0.01">
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-size: 13px; color: #2563eb;">
+                                Total: <span id="split-total">0</span> / <span id="grand-total">${total.toFixed(2)}</span>
+                            </div>
+                            <button id="apply-split" style="
+                                background: #3b82f6;
+                                color: white;
+                                border: none;
+                                padding: 8px 16px;
+                                border-radius: 8px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                            ">Apply Split / Weka</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Selected Payment Summary -->
+                    <div id="payment-summary" style="
+                        margin-top: 15px;
+                        padding: 12px;
+                        background: #e8f5e9;
+                        border-radius: 8px;
+                        font-size: 13px;
+                        color: #2e7d32;
+                        display: none;
+                    ">
+                        <span id="payment-summary-text"></span>
                     </div>
                 </div>
                 
@@ -713,7 +845,7 @@ function showPaymentModal() {
                         font-size: 16px;
                         cursor: pointer;
                         transition: background 0.2s;
-                    ">← Back to Cart</button>
+                    ">← Back to Cart / Rudi Kwenye Kikapu</button>
                     <button id="complete-purchase-btn" style="
                         flex: 1;
                         padding: 16px;
@@ -725,9 +857,11 @@ function showPaymentModal() {
                         font-size: 16px;
                         cursor: pointer;
                         transition: transform 0.2s, box-shadow 0.2s;
-                    ">
+                        opacity: 0.5;
+                        pointer-events: none;
+                    " disabled>
                         <span style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                            <span>Complete Purchase</span>
+                            <span>Complete Purchase / Maliza Ununuzi</span>
                             <span>✅</span>
                         </span>
                     </button>
@@ -738,6 +872,9 @@ function showPaymentModal() {
     
     document.body.appendChild(modalBackdrop);
     
+    // Initialize payment method handlers
+    initPaymentMethodHandlers(total);
+    
     document.getElementById('back-to-cart-btn').onclick = () => {
         modalBackdrop.remove();
         setTimeout(() => showCartReview(), 300);
@@ -747,28 +884,165 @@ function showPaymentModal() {
         const btn = document.getElementById('complete-purchase-btn');
         const originalText = btn.innerHTML;
         
-        btn.innerHTML = '<span>Processing...</span>';
+        btn.innerHTML = '<span>Processing... / Inashughulikia...</span>';
         btn.disabled = true;
         
         try {
+            // Determine payment method string for record
+            let paymentMethod = selectedPaymentMethods.join('+');
+            if (selectedPaymentMethods.length === 0) paymentMethod = 'cash'; // default
+            
             await completeSale({
-                method: 'cash',
-                cashAmount: total,
-                notes: 'Sale from smart batch system'
+                method: paymentMethod,
+                split: paymentSplit,
+                total: total
             });
             
             modalBackdrop.remove();
+            showNotification('✅ Sale completed! / Ununuzi umekamilika!', 'success', 3000);
             
         } catch (error) {
             btn.innerHTML = originalText;
             btn.disabled = false;
-            showNotification(`❌ Sale failed: ${error.message}`, 'error', 5000);
+            showNotification(`❌ Sale failed: ${error.message} / Ununuzi umeshindwa: ${error.message}`, 'error', 5000);
         }
     };
     
     modalBackdrop.onclick = (e) => {
         if (e.target === modalBackdrop) modalBackdrop.remove();
     };
+}
+
+// ====================================================
+// PAYMENT METHOD HANDLERS
+// ====================================================
+
+function initPaymentMethodHandlers(total) {
+    const options = document.querySelectorAll('.payment-option');
+    const mixedSection = document.getElementById('mixed-payment-section');
+    const summary = document.getElementById('payment-summary');
+    const summaryText = document.getElementById('payment-summary-text');
+    const completeBtn = document.getElementById('complete-purchase-btn');
+    
+    options.forEach(opt => {
+        opt.addEventListener('click', function() {
+            const method = this.dataset.method;
+            
+            // Toggle selection
+            if (this.classList.contains('selected')) {
+                // Deselect
+                this.classList.remove('selected');
+                this.style.borderColor = '#e9ecef';
+                this.style.background = '#f8f9fa';
+                selectedPaymentMethods = selectedPaymentMethods.filter(m => m !== method);
+                paymentSplit[method] = 0;
+            } else {
+                // Select
+                this.classList.add('selected');
+                this.style.borderColor = '#3b82f6';
+                this.style.background = '#eff6ff';
+                selectedPaymentMethods.push(method);
+            }
+            
+            // Show/hide mixed payment section
+            if (selectedPaymentMethods.length > 1) {
+                mixedSection.style.display = 'block';
+                resetSplitInputs();
+            } else {
+                mixedSection.style.display = 'none';
+                // If only one method, set full amount
+                if (selectedPaymentMethods.length === 1) {
+                    const method = selectedPaymentMethods[0];
+                    paymentSplit = { cash: 0, mpesa: 0, card: 0 };
+                    paymentSplit[method] = total;
+                }
+            }
+            
+            // Update payment summary
+            updatePaymentSummary(total, summary, summaryText);
+            
+            // Enable/disable complete button
+            if (selectedPaymentMethods.length > 0) {
+                completeBtn.style.opacity = '1';
+                completeBtn.style.pointerEvents = 'auto';
+                completeBtn.disabled = false;
+            } else {
+                completeBtn.style.opacity = '0.5';
+                completeBtn.style.pointerEvents = 'none';
+                completeBtn.disabled = true;
+            }
+        });
+    });
+    
+    // Split payment handlers
+    document.getElementById('cash-amount')?.addEventListener('input', () => validateSplit(total));
+    document.getElementById('mpesa-amount')?.addEventListener('input', () => validateSplit(total));
+    document.getElementById('card-amount')?.addEventListener('input', () => validateSplit(total));
+    
+    document.getElementById('apply-split')?.addEventListener('click', () => applySplit(total, summary, summaryText));
+}
+
+function resetSplitInputs() {
+    document.getElementById('cash-amount').value = '0';
+    document.getElementById('mpesa-amount').value = '0';
+    document.getElementById('card-amount').value = '0';
+    document.getElementById('split-total').textContent = '0';
+}
+
+function validateSplit(total) {
+    const cash = parseFloat(document.getElementById('cash-amount').value) || 0;
+    const mpesa = parseFloat(document.getElementById('mpesa-amount').value) || 0;
+    const card = parseFloat(document.getElementById('card-amount').value) || 0;
+    const splitTotal = cash + mpesa + card;
+    
+    document.getElementById('split-total').textContent = splitTotal.toFixed(2);
+    
+    const applyBtn = document.getElementById('apply-split');
+    if (Math.abs(splitTotal - total) < 0.01) {
+        applyBtn.style.background = '#10b981';
+    } else {
+        applyBtn.style.background = '#94a3b8';
+    }
+}
+
+function applySplit(total, summary, summaryText) {
+    const cash = parseFloat(document.getElementById('cash-amount').value) || 0;
+    const mpesa = parseFloat(document.getElementById('mpesa-amount').value) || 0;
+    const card = parseFloat(document.getElementById('card-amount').value) || 0;
+    const splitTotal = cash + mpesa + card;
+    
+    if (Math.abs(splitTotal - total) > 0.01) {
+        alert('Split amounts must equal total! / Malipo yanapaswa kuwa sawa na jumla!');
+        return;
+    }
+    
+    // Store the split
+    paymentSplit = { cash, mpesa, card };
+    
+    updatePaymentSummary(total, summary, summaryText);
+}
+
+function updatePaymentSummary(total, summary, summaryText) {
+    if (selectedPaymentMethods.length === 0) {
+        summary.style.display = 'none';
+        return;
+    }
+    
+    let text = '';
+    if (selectedPaymentMethods.length === 1) {
+        const method = selectedPaymentMethods[0];
+        const methodNames = { cash: '💰 Cash', mpesa: '📱 M-Pesa', card: '💳 Card' };
+        text = `${methodNames[method]} - Full payment / Malipo kamili`;
+    } else {
+        const parts = [];
+        if (paymentSplit.cash > 0) parts.push(`💰 Cash: $${paymentSplit.cash.toFixed(2)}`);
+        if (paymentSplit.mpesa > 0) parts.push(`📱 M-Pesa: $${paymentSplit.mpesa.toFixed(2)}`);
+        if (paymentSplit.card > 0) parts.push(`💳 Card: $${paymentSplit.card.toFixed(2)}`);
+        text = `Split: ${parts.join(' + ')}`;
+    }
+    
+    summaryText.textContent = text;
+    summary.style.display = 'block';
 }
 
 // ====================================================
@@ -970,60 +1244,151 @@ async function rollbackItemDeduction(itemResult) {
     }
 }
 
-/**
- * Create sale record document
- */
-async function createSaleRecord(shop_id, seller, items, updatedItems) {
-    const saleId = generateTransactionId();
-    const totalAmount = updatedItems.reduce((sum, item) => sum + item.total_price, 0);
-    
-    const saleRecord = {
-        id: saleId,
-        shop_id,
-        seller,
-        items: items.map(item => ({
-            ...item,
-            processed_at: new Date().toISOString()
-        })),
-        processed_items: updatedItems,
-        total_amount: totalAmount,
-        timestamp: new Date().toISOString(),
-        created_at: serverTimestamp(),
-        status: 'completed',
-        payment_method: 'cash',
-        transaction_count: updatedItems.length
-    };
-    
-    // Save to Firestore in a sales collection
-    const saleRef = doc(db, "Shops", shop_id, "sales", saleId);
-    
+// ====================================================
+// CREATE SALE RECORD - FIXED FOR STAFF
+// ====================================================
+async function createSaleRecord(shop_id, seller, items, updatedItems, paymentDetails = {}) {
     try {
-        await setDoc(saleRef, saleRecord);
+        const saleId = generateTransactionId();
+        const totalAmount = updatedItems.reduce((sum, item) => sum + (item.total_price || 0), 0);
+        
+        // ✅ FIX: Get current user safely
+        const auth = getAuth();
+        const user = auth.currentUser;
+        
+        // ✅ FIX: Get session type and staff context
+        const sessionType = localStorage.getItem("sessionType") || "owner";
+        let staffInfo = {};
+        
+        if (sessionType === "staff") {
+            try {
+                const staffContext = JSON.parse(localStorage.getItem("staffContext") || "{}");
+                staffInfo = {
+                    staffId: staffContext.staffId || null,
+                    roleName: staffContext.roleName || null,
+                    accessLevel: staffContext.accessLevel || null,
+                    staffName: staffContext.name || null
+                };
+            } catch (e) {
+                console.error('Error parsing staff context:', e);
+            }
+        }
+        
+        // ✅ FIX: Build seller info with NO undefined values
+        const sellerInfo = {
+            uid: user?.uid || null,
+            email: user?.email || null,
+            name: user?.displayName || seller?.name || null,
+            sessionType: sessionType,
+            ...staffInfo
+        };
+        
+        // ✅ FIX: Clean items - remove any undefined values
+        const cleanItems = (items || []).map(item => ({
+            item_id: item.item_id || null,
+            main_item_id: item.main_item_id || item.item_id || null,
+            category_id: item.category_id || null,
+            name: item.name || null,
+            display_name: item.display_name || item.name || null,
+            type: item.type || "main_item",
+            quantity: parseFloat(item.quantity) || 1,
+            price: parseFloat(item.price || item.sellPrice || item.sell_price) || 0,
+            batch_id: item.batch_id || null,
+            sell_unit_id: item.sell_unit_id || null,
+            conversion_factor: parseFloat(item.conversion_factor) || 1
+        }));
+        
+        // ✅ FIX: Clean processed items
+        const cleanProcessedItems = (updatedItems || []).map(item => ({
+            item_id: item.item_id || null,
+            item_type: item.item_type || null,
+            batch_id: item.batch_id || null,
+            quantity_sold: parseFloat(item.quantity_sold) || 0,
+            base_units_deducted: parseFloat(item.base_units_deducted) || 0,
+            remaining_batch_quantity: parseFloat(item.remaining_batch_quantity) || 0,
+            remaining_total_stock: parseFloat(item.remaining_total_stock) || 0,
+            batch_exhausted: item.batch_exhausted || false,
+            total_price: parseFloat(item.total_price) || 0,
+            unit_price: parseFloat(item.unit_price) || 0,
+            transaction_id: item.transaction_id || null
+        }));
+        
+        // ✅ ENHANCED: Add payment method details
+        const paymentMethod = paymentDetails.method || 'cash';
+        const paymentSplit = paymentDetails.split || null;
+        
+        // ✅ FIX: Create sale record with NO undefined values
+        const saleRecord = {
+            id: saleId,
+            shop_id: shop_id || null,
+            seller: sellerInfo,
+            items: cleanItems,
+            processed_items: cleanProcessedItems,
+            total_amount: totalAmount || 0,
+            payment_method: paymentMethod,
+            payment_split: paymentSplit,
+            timestamp: new Date().toISOString(),
+            created_at: serverTimestamp(),
+            status: 'completed',
+            transaction_count: updatedItems?.length || 0
+        };
+        
+        // ✅ FIX: Final check - remove any undefined values at top level
+        const finalSaleRecord = {};
+        Object.keys(saleRecord).forEach(key => {
+            if (saleRecord[key] !== undefined) {
+                finalSaleRecord[key] = saleRecord[key];
+            }
+        });
+        
+        // Save to Firestore
+        const saleRef = doc(db, "Shops", shop_id, "sales", saleId);
+        
+        await setDoc(saleRef, finalSaleRecord);
         console.log('📝 Sale record created:', saleId);
+        
+        return finalSaleRecord;
+        
     } catch (error) {
-        console.warn('Could not save sale record:', error);
-        // Sale still successful, just record creation failed
+        console.error('❌ Error creating sale record:', error);
+        return {
+            id: generateTransactionId(),
+            error: 'Record creation failed',
+            items_processed: updatedItems?.length || 0
+        };
     }
-    
-    return saleRecord;
 }
 
 /**
  * Main sale completion function (replaces backend call)
  */
-async function completeSale(paymentDetails = {}) {
+async function completeSale(paymentDetails = { method: 'cash', split: null, total: 0 }) {
     console.log('🛒 Starting FRONTEND sale completion');
     
     const auth = getAuth();
     const user = auth.currentUser;
-    if (!user) throw new Error("Please login first");
+    if (!user) throw new Error("Please login first / Tafadhali ingia kwanza");
 
-    if (!currentShopId) currentShopId = user.uid;
-    if (cart.length === 0) throw new Error("Cart is empty!");
+    // ✅ FIX: Get shop ID properly (works for both owner and staff)
+    const sessionType = localStorage.getItem("sessionType") || "owner";
+    let shop_id = user.uid;
+    
+    if (sessionType === "staff") {
+        try {
+            const staffContext = JSON.parse(localStorage.getItem("staffContext") || "{}");
+            if (staffContext.shopId) {
+                shop_id = staffContext.shopId;
+                console.log('👥 Staff sale - using shop ID:', shop_id);
+            }
+        } catch (e) {
+            console.error('Error parsing staff context:', e);
+        }
+    }
+    
+    if (cart.length === 0) throw new Error("Cart is empty! / Kikapu hakina bidhaa!");
 
-    const shop_id = currentShopId;
     const seller = {
-        type: localStorage.getItem("sessionType") || "owner",
+        type: sessionType,
         authUid: user.uid,
         name: user.displayName || "",
         email: user.email || ""
@@ -1078,7 +1443,6 @@ async function completeSale(paymentDetails = {}) {
     if (errors.length > 0) {
         console.log('Rolling back successful items due to errors', errors);
         
-        // Attempt rollback for successful items
         for (const item of updatedItems) {
             if (item.rolled_back !== true) {
                 try {
@@ -1092,8 +1456,8 @@ async function completeSale(paymentDetails = {}) {
         throw new Error(`Sale partially failed: ${errors.length} item(s) could not be processed. ${errors[0].error}`);
     }
     
-    // Create sale record
-    const saleRecord = await createSaleRecord(shop_id, seller, saleItems, updatedItems);
+    // Create sale record with payment details
+    const saleRecord = await createSaleRecord(shop_id, seller, saleItems, updatedItems, paymentDetails);
     
     // Clear cart and reset cart ID
     cart = [];
@@ -1103,16 +1467,17 @@ async function completeSale(paymentDetails = {}) {
     
     console.log('🎉 FRONTEND SALE COMPLETED SUCCESSFULLY', {
         items_processed: updatedItems.length,
-        sale_id: saleRecord.id
+        sale_id: saleRecord.id,
+        payment_method: paymentDetails.method
     });
     
-    showNotification('✅ Frontend sale completed successfully!', 'success', 5000);
+    showNotification('✅ Frontend sale completed successfully! / Ununuzi umekamilika kikamilifu!', 'success', 5000);
     
     return {
         success: true,
         updated_items: updatedItems,
         sale_record: saleRecord,
-        message: `Sale completed successfully. ${updatedItems.length} item(s) processed.`
+        message: `Sale completed successfully. ${updatedItems.length} item(s) processed. / Ununuzi umekamilika. Vitu ${updatedItems.length} vimeshughulikiwa.`
     };
 }
 
@@ -1126,7 +1491,7 @@ function removeCartItem(index) {
         cart.splice(index, 1);
         saveCartToStorage();
         updateCartIcon();
-        showNotification(`Removed ${itemName} from cart`, 'info', 2000);
+        showNotification(`Removed ${itemName} from cart / Imeondolewa ${itemName} kwenye kikapu`, 'info', 2000);
         
         const existingModal = document.querySelector('.cart-modal-backdrop');
         if (existingModal) {
@@ -1162,14 +1527,14 @@ document.addEventListener("DOMContentLoaded", () => {
             cart = [];
             saveCartToStorage();
             updateCartIcon();
-            showNotification('Cart cleared', 'info', 2000);
+            showNotification('Cart cleared / Kikapu kimefutwa', 'info', 2000);
         },
         removeItem: removeCartItem,
         showCart: showCartReview,
         updateIcon: updateCartIcon,
         getCount: getCartCount,
         getTotal: getCartTotal,
-        completeSale: completeSale, // Expose for external use
+        completeSale: completeSale,
         debug: () => {
             console.log('🛒 SMART CART DEBUG:', cart.map(item => ({
                 name: item.name,
@@ -1191,6 +1556,8 @@ document.addEventListener("DOMContentLoaded", () => {
 ║ • Real stock management                  ║
 ║ • Frontend sale processing               ║
 ║ • Error recovery & rollback              ║
+║ • Multi-payment methods                  ║
+║   (Cash, M-Pesa, Card, Split)            ║
 ║ • No backend required!                   ║
 ╚═══════════════════════════════════════════╝
 `);

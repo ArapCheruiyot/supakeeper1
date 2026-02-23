@@ -1,19 +1,59 @@
+/**
+ * upgradePaymentsSummary.js - Admin Dashboard for Upgrade Requests
+ * 
+ * This file:
+ * 1. Shows all upgrade requests from all shops in real-time
+ * 2. Categorizes them (Paid, Just Requested, Verified)
+ * 3. Provides verify buttons for paid requests
+ * 4. Updates shop plans when admin verifies payment
+ * 
+ * Bilingual: English + Swahili
+ */
+
 import { db } from "../firebase-config.js";
 import { 
     collection, 
     getDocs, 
     onSnapshot,
     query,
-    where
+    where,
+    doc,
+    getDoc,
+    updateDoc,
+    setDoc,
+    serverTimestamp
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 // Store the unsubscribe functions to clean up later
 let unsubscribeFunctions = [];
 let isListening = false;
 
+// Staff limits for each plan
+const STAFF_LIMITS = {
+    BASIC: 5,
+    TEAM: 10,
+    BUSINESS: 20,
+    ENTERPRISE: 100
+};
+
+// Plan prices
+const PLAN_PRICES = {
+    BASIC: 250,
+    TEAM: 500,
+    BUSINESS: 2500,
+    ENTERPRISE: 5000
+};
+
+// Global array to store all requests (needed for refresh after verification)
+let allRequests = [];
+
+/**
+ * MAIN FUNCTION: Load all upgrade requests from all shops
+ * Called automatically when page loads and when refresh button is clicked
+ */
 async function loadUpgradeSummary() {
     const container = document.getElementById('upgrade-summary');
-    container.innerHTML = '<div class="loading">Loading upgrade requests...</div>';
+    container.innerHTML = '<div class="loading">Loading upgrade requests... / Inapakia maombi ya kuboresha...</div>';
 
     try {
         console.log("📊 Loading upgrade requests from all shops...");
@@ -21,7 +61,7 @@ async function loadUpgradeSummary() {
         // 1️⃣ Get all shops first to get shop names
         const shopsSnapshot = await getDocs(collection(db, "Shops"));
         if (shopsSnapshot.empty) {
-            container.innerHTML = '<p>No shops found.</p>';
+            container.innerHTML = '<p>No shops found. / Hakuna maduka yaliyopatikana.</p>';
             updateStats(0, 0, 0, 0);
             return;
         }
@@ -38,20 +78,19 @@ async function loadUpgradeSummary() {
         // Clear any existing listeners
         cleanupListeners();
 
+        // Reset the global requests array
+        allRequests = [];
+
         // 2️⃣ Set up real-time listeners for each shop's upgradeRequests subcollection
-        const allRequests = [];
         const shopPromises = [];
 
         for (const shopId in shopMap) {
-            const promise = setupShopListener(shopId, shopMap[shopId], allRequests);
+            const promise = setupShopListener(shopId, shopMap[shopId]);
             shopPromises.push(promise);
         }
 
         // Wait for all listeners to be set up
         await Promise.all(shopPromises);
-
-        // Process the initial data
-        processAndDisplayData(allRequests, shopMap);
 
         // Start listening for changes
         isListening = true;
@@ -61,16 +100,19 @@ async function loadUpgradeSummary() {
         console.error("❌ Error loading upgrade requests:", error);
         container.innerHTML = `
             <div style="color: red; padding: 1rem; background: #f8d7da; border-radius: 5px;">
-                <h3>Failed to load upgrade requests</h3>
-                <p>Error: ${error.message}</p>
-                <button onclick="loadUpgradeSummary()" style="padding: 5px 10px; margin-top: 10px;">Retry</button>
+                <h3>Failed to load upgrade requests / Imeshindwa kupakia maombi</h3>
+                <p>Error / Hitilafu: ${error.message}</p>
+                <button onclick="loadUpgradeSummary()" style="padding: 5px 10px; margin-top: 10px;">Retry / Jaribu tena</button>
             </div>
         `;
         updateStats(0, 0, 0, 0);
     }
 }
 
-function setupShopListener(shopId, shopName, allRequestsArray) {
+/**
+ * Set up a real-time listener for a single shop's upgrade requests
+ */
+function setupShopListener(shopId, shopName) {
     return new Promise((resolve) => {
         try {
             const upgradeRequestsRef = collection(db, `Shops/${shopId}/upgradeRequests`);
@@ -79,9 +121,9 @@ function setupShopListener(shopId, shopName, allRequestsArray) {
             const unsubscribe = onSnapshot(upgradeRequestsRef, (snapshot) => {
                 console.log(`🔄 Real-time update for shop ${shopId}:`, snapshot.size, "documents");
                 
-                // Remove existing requests from this shop
+                // Remove existing requests from this shop from the global array
                 const existingIndexes = [];
-                allRequestsArray.forEach((req, index) => {
+                allRequests.forEach((req, index) => {
                     if (req.shopId === shopId) {
                         existingIndexes.push(index);
                     }
@@ -89,14 +131,14 @@ function setupShopListener(shopId, shopName, allRequestsArray) {
                 
                 // Remove from end to beginning to maintain indexes
                 existingIndexes.reverse().forEach(index => {
-                    allRequestsArray.splice(index, 1);
+                    allRequests.splice(index, 1);
                 });
                 
                 // Add new/updated requests
                 snapshot.forEach(reqDoc => {
                     const req = reqDoc.data();
                     
-                    allRequestsArray.push({
+                    allRequests.push({
                         id: reqDoc.id,
                         shopId,
                         shopName: req.shopName || shopName || "Unknown Shop",
@@ -106,18 +148,18 @@ function setupShopListener(shopId, shopName, allRequestsArray) {
                         requestedAt: req.requestedAt || req.timestamp || null,
                         verifiedAt: req.verifiedAt || null,
                         paymentSubmittedAt: req.paymentSubmittedAt || null,
-                        priceKES: req.priceKES || "N/A",
-                        staffLimit: req.staffLimit || "N/A",
+                        priceKES: req.priceKES || PLAN_PRICES[req.requestedPlan] || "N/A",
+                        staffLimit: req.staffLimit || STAFF_LIMITS[req.requestedPlan] || "N/A",
                         _raw: req,
                         _updatedAt: new Date() // Track when this record was last updated
                     });
                 });
                 
                 // Process and display updated data
-                processAndDisplayData(allRequestsArray);
+                processAndDisplayData();
                 
                 // Show notification for new updates
-                showUpdateNotification(`Updated: ${shopName}`);
+                showUpdateNotification(`Updated: ${shopName} / Imesasishwa: ${shopName}`);
             }, (error) => {
                 console.error(`❌ Listener error for shop ${shopId}:`, error);
             });
@@ -133,11 +175,14 @@ function setupShopListener(shopId, shopName, allRequestsArray) {
     });
 }
 
-function processAndDisplayData(allRequests, shopMap = null) {
+/**
+ * Process all requests and display them in categorized tables
+ */
+function processAndDisplayData() {
     console.log("🔄 Processing data:", allRequests.length, "requests");
     
     if (allRequests.length === 0) {
-        document.getElementById('upgrade-summary').innerHTML = "<p>No upgrade requests found.</p>";
+        document.getElementById('upgrade-summary').innerHTML = "<p>No upgrade requests found. / Hakuna maombi ya kuboresha yaliyopatikana.</p>";
         updateStats(0, 0, 0, 0);
         return;
     }
@@ -158,7 +203,7 @@ function processAndDisplayData(allRequests, shopMap = null) {
     // 5️⃣ Build HTML
     let html = '';
 
-    // Paid / Waiting Verification
+    // SECTION 1: Paid / Waiting Verification (NEEDS ADMIN ACTION)
     if (paid.length > 0) {
         // Sort by most recent first
         const sortedPaid = [...paid].sort((a, b) => {
@@ -170,16 +215,19 @@ function processAndDisplayData(allRequests, shopMap = null) {
         html += `
             <div style="margin-bottom: 2rem;">
                 <h3>💰 Paid / Waiting Verification (${paid.length})</h3>
+                <p style="color: #666; margin: 5px 0 15px;">
+                    <em>Wamelipa / Wanangoja Kuthibitishwa - Angalia simu yako kuthibitisha malipo kabla ya kubonyeza Thibitisha</em>
+                </p>
                 <table>
                     <thead>
                         <tr>
-                            <th>Shop Name</th>
-                            <th>Requested Plan</th>
-                            <th>Status</th>
-                            <th>MPESA Ref</th>
-                            <th>Amount</th>
-                            <th>Submitted At</th>
-                            <th>Last Update</th>
+                            <th>Shop / Duka</th>
+                            <th>Plan / Mpango</th>
+                            <th>Status / Hali</th>
+                            <th>M-PESA Ref / Kumbukumbu</th>
+                            <th>Amount / Kiasi</th>
+                            <th>Date / Tarehe</th>
+                            <th>Action / Hatua</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -191,16 +239,40 @@ function processAndDisplayData(allRequests, shopMap = null) {
                                 <td><code>${r.mpesaReference}</code></td>
                                 <td>KES ${r.priceKES}</td>
                                 <td>${formatDate(r.paymentSubmittedAt || r.requestedAt)}</td>
-                                <td><small style="color: #6c757d;">${formatTimeAgo(r._updatedAt)}</small></td>
+                                <td>
+                                    <button onclick="verifyPayment('${r.shopId}', '${r.id}', '${r.requestedPlan}', '${r.mpesaReference}')" 
+                                            style="
+                                                background: #28a745;
+                                                color: white;
+                                                border: none;
+                                                padding: 8px 12px;
+                                                border-radius: 4px;
+                                                cursor: pointer;
+                                                font-size: 13px;
+                                                font-weight: 600;
+                                                display: inline-flex;
+                                                align-items: center;
+                                                gap: 5px;
+                                                transition: all 0.2s;
+                                            "
+                                            onmouseover="this.style.background='#218838'"
+                                            onmouseout="this.style.background='#28a745'"
+                                            title="Click to confirm payment and upgrade this shop / Bonyeza kuthibitisha malipo na kuboresha duka hili">
+                                        ✅ Verify & Upgrade / Thibitisha & Boresha
+                                    </button>
+                                </td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
+                <p style="font-size:0.85rem; color:#dc3545; margin-top:5px;">
+                    <strong>⚠️ Important / Muhimu:</strong> Check your phone to confirm M-Pesa payment before clicking Verify. / Angalia simu yako kuthibitisha malipo ya M-Pesa kabla ya kubonyeza Thibitisha.
+                </p>
             </div>
         `;
     }
 
-    // Just Requested (not paid yet)
+    // SECTION 2: Just Requested (not paid yet)
     if (requestedOnly.length > 0) {
         // Sort by most recent first
         const sortedRequested = [...requestedOnly].sort((a, b) => {
@@ -210,15 +282,18 @@ function processAndDisplayData(allRequests, shopMap = null) {
         html += `
             <div style="margin-bottom: 2rem;">
                 <h3>📝 Just Requested - Awaiting Payment (${requestedOnly.length})</h3>
+                <p style="color: #666; margin: 5px 0 15px;">
+                    <em>Wameomba tu - Wanangoja Malipo / Wateja hawa wameomba kuboresha lakini hawajalipa bado</em>
+                </p>
                 <table>
                     <thead>
                         <tr>
-                            <th>Shop Name</th>
-                            <th>Requested Plan</th>
-                            <th>Status</th>
-                            <th>Requested At</th>
-                            <th>Price</th>
-                            <th>Last Update</th>
+                            <th>Shop / Duka</th>
+                            <th>Plan / Mpango</th>
+                            <th>Status / Hali</th>
+                            <th>Requested / Aliomba</th>
+                            <th>Price / Bei</th>
+                            <th>Last Update / Sasisho</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -234,11 +309,14 @@ function processAndDisplayData(allRequests, shopMap = null) {
                         `).join('')}
                     </tbody>
                 </table>
+                <p style="font-size:0.85rem; color:#856404; margin-top:5px;">
+                    <em>These customers have requested upgrade but haven't paid yet. / Wateja hawa wameomba kuboresha lakini hawajalipa bado.</em>
+                </p>
             </div>
         `;
     }
 
-    // Already Verified
+    // SECTION 3: Already Verified
     if (verified.length > 0) {
         // Sort by most recent verification first
         const sortedVerified = [...verified].sort((a, b) => {
@@ -248,14 +326,17 @@ function processAndDisplayData(allRequests, shopMap = null) {
         html += `
             <div style="margin-bottom: 2rem;">
                 <h3>✅ Already Verified (${verified.length})</h3>
+                <p style="color: #666; margin: 5px 0 15px;">
+                    <em>Tayari Wamethibitishwa / Maboresho haya yamekamilika</em>
+                </p>
                 <table>
                     <thead>
                         <tr>
-                            <th>Shop Name</th>
-                            <th>Plan</th>
-                            <th>Verified At</th>
-                            <th>MPESA Ref</th>
-                            <th>Last Update</th>
+                            <th>Shop / Duka</th>
+                            <th>Plan / Mpango</th>
+                            <th>Verified / Ilithibitishwa</th>
+                            <th>M-PESA Ref / Kumbukumbu</th>
+                            <th>Last Update / Sasisho</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -270,22 +351,25 @@ function processAndDisplayData(allRequests, shopMap = null) {
                         `).join('')}
                     </tbody>
                 </table>
+                <p style="font-size:0.85rem; color:#28a745; margin-top:5px;">
+                    <em>These upgrades are complete. / Maboresho haya yamekamilika.</em>
+                </p>
             </div>
         `;
     }
 
-    // Status indicator
+    // Dashboard Status Footer
     const statusIndicator = isListening ? 
-        '<span style="color: green;">● Live</span>' : 
+        '<span style="color: green;">● Live / Moja kwa moja</span>' : 
         '<span style="color: orange;">● Manual</span>';
     
     html += `
         <div style="margin-top: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 5px; font-size: 0.9rem;">
-            <h4>📋 Dashboard Status ${statusIndicator}</h4>
-            <p>Found ${allRequests.length} upgrade request(s) from ${shopMap ? Object.keys(shopMap).length : 'multiple'} shop(s)</p>
-            <p>Last updated: ${new Date().toLocaleTimeString()}</p>
+            <h4>📋 Dashboard Status / Hali ya Dashibodi ${statusIndicator}</h4>
+            <p>Found / Imepatikana: ${allRequests.length} upgrade request(s) / maombi ya kuboresha</p>
+            <p>Last updated / Sasisho la mwisho: ${new Date().toLocaleTimeString()}</p>
             <button onclick="toggleAutoRefresh()" style="padding: 5px 10px; margin-top: 5px; font-size: 0.8rem;">
-                ${isListening ? '⏸️ Pause Updates' : '▶️ Resume Updates'}
+                ${isListening ? '⏸️ Pause Updates / Simamisha' : '▶️ Resume Updates / Anza upya'}
             </button>
         </div>
     `;
@@ -293,6 +377,137 @@ function processAndDisplayData(allRequests, shopMap = null) {
     document.getElementById('upgrade-summary').innerHTML = html;
 }
 
+/**
+ * VERIFY PAYMENT FUNCTION - The missing piece!
+ * Called when admin clicks the verify button
+ */
+window.verifyPayment = async function(shopId, requestId, planName, mpesaRef) {
+    // Step 1: Confirm with admin (Bilingual)
+    const confirmMessage = 
+        `📱 CONFIRM PAYMENT / THIBITISHA MALIPO\n\n` +
+        `Have you received KES ${PLAN_PRICES[planName] || 'the amount'} via M-Pesa from this customer?\n` +
+        `Reference / Kumbukumbu: ${mpesaRef}\n\n` +
+        `Click OK to upgrade their plan. / Bonyeza OK kuboresha mpango wao.\n\n` +
+        `⚠️ IMPORTANT: Check your phone first! / MUHIMU: Angalia simu yako kwanza!`;
+    
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    try {
+        // Get the button that was clicked
+        const btn = event.target;
+        const originalText = btn.textContent;
+        
+        // Show loading state
+        btn.textContent = '⏳ Upgrading... / Inaboresha...';
+        btn.disabled = true;
+        btn.style.background = '#6c757d';
+        
+        console.log(`🔍 Verifying payment for shop ${shopId}, request ${requestId}`);
+        
+        // 1. Get the request details
+        const requestRef = doc(db, "Shops", shopId, "upgradeRequests", requestId);
+        const requestSnap = await getDoc(requestRef);
+        
+        if (!requestSnap.exists()) {
+            alert("❌ Request not found / Ombi halikupatikana");
+            resetButton(btn, originalText);
+            return;
+        }
+        
+        // 2. Update the shop's plan
+        const planRef = doc(db, "Shops", shopId, "plan", "default");
+        const staffLimit = STAFF_LIMITS[planName] || 5;
+        
+        // Check if plan document exists
+        const planSnap = await getDoc(planRef);
+        
+        if (planSnap.exists()) {
+            await updateDoc(planRef, {
+                name: planName,
+                staffLimit: staffLimit,
+                updatedAt: serverTimestamp(),
+                upgradedFrom: requestId,
+                verifiedAt: serverTimestamp(),
+                verifiedBy: "admin"
+            });
+            console.log("✅ Plan updated (existing)");
+        } else {
+            await setDoc(planRef, {
+                name: planName,
+                staffLimit: staffLimit,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                upgradedFrom: requestId,
+                verifiedAt: serverTimestamp(),
+                verifiedBy: "admin"
+            });
+            console.log("✅ Plan created (new)");
+        }
+        
+        // 3. Mark the upgrade request as completed
+        await updateDoc(requestRef, {
+            status: "completed",
+            verifiedAt: serverTimestamp(),
+            verifiedBy: "admin",
+            verifiedMpesaReference: mpesaRef,
+            notes: "Manually verified by admin / Imethibitishwa na admin"
+        });
+        console.log("✅ Request marked as completed");
+        
+        // 4. Update payment record if exists (optional)
+        try {
+            const paymentsRef = collection(db, "Shops", shopId, "payments");
+            const paymentsQuery = query(paymentsRef, where("mpesaReference", "==", mpesaRef));
+            const paymentsSnap = await getDocs(paymentsQuery);
+            
+            paymentsSnap.forEach(async (paymentDoc) => {
+                await updateDoc(paymentDoc.ref, {
+                    status: "verified",
+                    verifiedAt: serverTimestamp(),
+                    verifiedBy: "admin"
+                });
+            });
+            console.log("✅ Payment records updated");
+        } catch (e) {
+            console.log("No payment records found or error updating:", e);
+        }
+        
+        // 5. Show success message (Bilingual)
+        alert(
+            `✅ SUCCESS! / IMEFAULU!\n\n` +
+            `Shop upgraded to ${planName} plan.\n` +
+            `Staff limit is now ${staffLimit}.\n\n` +
+            `Duka limeboreshwa hadi mpango wa ${planName}.\n` +
+            `Idadi ya wafanyakazi sasa ni ${staffLimit}.`
+        );
+        
+        // No need to refresh - real-time listeners will update automatically
+        
+    } catch (error) {
+        console.error("❌ Error verifying payment:", error);
+        alert(
+            `❌ Error upgrading plan: ${error.message}\n\n` +
+            `Hitilafu katika kuboresha mpango: ${error.message}`
+        );
+        
+        // Reset button
+        const btn = event.target;
+        btn.textContent = '✅ Verify & Upgrade / Thibitisha & Boresha';
+        btn.disabled = false;
+        btn.style.background = '#28a745';
+    }
+}
+
+// Helper to reset button
+function resetButton(btn, originalText) {
+    btn.textContent = originalText;
+    btn.disabled = false;
+    btn.style.background = '#28a745';
+}
+
+// Update statistics at the top of the page
 function updateStats(total, requested, paidVerify, verified) {
     document.getElementById('total-requests').textContent = total;
     document.getElementById('awaiting-payment').textContent = requested;
@@ -300,19 +515,17 @@ function updateStats(total, requested, paidVerify, verified) {
     document.getElementById('verified').textContent = verified;
 }
 
+// Format date for display
 function formatDate(timestamp) {
     if (!timestamp) return "N/A";
     
     try {
         let date;
         if (timestamp.toDate) {
-            // Firestore timestamp
             date = timestamp.toDate();
         } else if (timestamp.seconds) {
-            // Timestamp object
             date = new Date(timestamp.seconds * 1000);
         } else if (typeof timestamp === 'string') {
-            // ISO string
             date = new Date(timestamp);
         } else {
             return "Invalid date";
@@ -328,6 +541,7 @@ function formatDate(timestamp) {
     }
 }
 
+// Get timestamp from various formats
 function getTimestamp(dateObj) {
     if (!dateObj) return 0;
     
@@ -347,6 +561,7 @@ function getTimestamp(dateObj) {
     return 0;
 }
 
+// Format time ago (e.g., "2 min ago")
 function formatTimeAgo(date) {
     if (!date) return "N/A";
     
@@ -355,14 +570,14 @@ function formatTimeAgo(date) {
     const diffMs = now - updateDate;
     const diffSec = Math.floor(diffMs / 1000);
     
-    if (diffSec < 60) return "just now";
-    if (diffSec < 3600) return `${Math.floor(diffSec / 60)} min ago`;
-    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} hr ago`;
-    return `${Math.floor(diffSec / 86400)} days ago`;
+    if (diffSec < 60) return "just now / sasa hivi";
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)} min ago / dakika zilizopita`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} hr ago / saa zilizopita`;
+    return `${Math.floor(diffSec / 86400)} days ago / siku zilizopita`;
 }
 
+// Show notification for updates
 function showUpdateNotification(message) {
-    // Create or update notification element
     let notification = document.getElementById('update-notification');
     
     if (!notification) {
@@ -382,7 +597,6 @@ function showUpdateNotification(message) {
         `;
         document.body.appendChild(notification);
         
-        // Add CSS animation
         const style = document.createElement('style');
         style.textContent = `
             @keyframes slideIn {
@@ -400,7 +614,6 @@ function showUpdateNotification(message) {
     notification.textContent = `🔄 ${message}`;
     notification.style.background = '#28a745';
     
-    // Auto-hide after 3 seconds
     clearTimeout(notification.timeout);
     notification.timeout = setTimeout(() => {
         notification.style.animation = 'fadeOut 0.5s ease';
@@ -412,6 +625,7 @@ function showUpdateNotification(message) {
     }, 3000);
 }
 
+// Clean up listeners
 function cleanupListeners() {
     console.log("🧹 Cleaning up listeners...");
     unsubscribeFunctions.forEach(unsubscribe => {
@@ -425,16 +639,17 @@ function cleanupListeners() {
     isListening = false;
 }
 
+// Toggle auto-refresh
 function toggleAutoRefresh() {
     if (isListening) {
         cleanupListeners();
-        showUpdateNotification("Updates paused. Click Refresh Data to update manually.");
+        showUpdateNotification("Updates paused / Sasisho zimesimamishwa");
     } else {
         loadUpgradeSummary();
     }
 }
 
-// Clean up listeners when page is unloaded
+// Clean up when page is unloaded
 window.addEventListener('beforeunload', cleanupListeners);
 
 // Make functions available globally
