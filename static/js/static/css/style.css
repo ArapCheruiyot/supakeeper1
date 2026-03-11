@@ -1,0 +1,280 @@
+/* Reset default browser styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Roboto', Arial, Helvetica, sans-serif;
+}
+
+/* Page layout */
+body {
+    background: #f9fafb;
+    color: #333;
+    text-align: center;
+    padding: 20px;
+}
+
+/* Header container */
+header div {
+    max-width: 500px;
+    margin: 0 auto;
+    padding-top: 40px;
+}
+
+/* Logo */
+header img {
+    width: 200px; /* bigger logo */
+    height: auto;
+    margin-bottom: 25px;
+    border-radius: 15px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Title */
+header h1 {
+    font-size: 2.4rem;
+    font-weight: bold;
+    margin-bottom: 12px;
+    color: #222;
+}
+
+/* Subtitle */
+header p {
+    font-size: 1.1rem;
+    color: #555;
+    margin-bottom: 30px;
+}
+
+/* Google Sign-in Button */
+#google-signin-btn {
+    background-color: white;
+    border: 1px solid #ccc;
+    padding: 14px 25px;
+    font-size: 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    width: 90%;
+    max-width: 300px;
+    display: inline-flex;
+    gap: 10px;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 35px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    transition: all 0.2s ease-in-out;
+    font-weight: 500;
+}
+
+/* Google colors text */
+#google-signin-btn span {
+    color: #4285F4; /* blue */
+    font-weight: bold;
+}
+
+/* Button hover effect */
+#google-signin-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+
+/* Section below */
+main div {
+    max-width: 500px;
+    margin: 0 auto;
+    padding-top: 15px;
+}
+
+/* Sub heading */
+main h2 {
+    font-size: 1.7rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #222;
+}
+
+/* Description text */
+main p {
+    font-size: 1.05rem;
+    color: #555;
+    margin-top: 6px;
+}
+
+/* ====================== */
+/*   TOUR SECTION STYLES  */
+/* ====================== */
+
+.tour-section {
+    margin: 25px 0 20px 0 !important;
+    padding: 20px !important;
+    background: linear-gradient(135deg, #f0f9ff, #e6f7ff) !important;
+    border: 3px solid #2563eb !important;
+    border-radius: 16px !important;
+    text-align: center !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+    z-index: 100 !important;
+    box-shadow: 0 8px 20px rgba(37,99,235,0.2) !important;
+}
+
+.tour-section p {
+    margin: 0 0 10px 0 !important;
+    font-size: 1rem !important;
+    line-height: 1.5 !important;
+}
+
+.tour-section p:first-child {
+    font-weight: 700 !important;
+    color: #1e293b !important;
+    font-size: 1.1rem !important;
+}
+
+.tour-section p:last-child {
+    margin-top: 12px !important;
+    margin-bottom: 0 !important;
+    color: #64748b !important;
+    font-size: 0.85rem !important;
+}
+
+#tour-demo-btn {
+    background: #2563eb !important;
+    color: white !important;
+    border: none !important;
+    padding: 12px 28px !important;
+    border-radius: 40px !important;
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    box-shadow: 0 4px 12px rgba(37,99,235,0.4) !important;
+    transition: all 0.2s !important;
+    display: inline-block !important;
+    width: auto !important;
+    min-width: 200px !important;
+    margin: 5px 0 !important;
+}
+
+#tour-demo-btn:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 16px rgba(37,99,235,0.5) !important;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .tour-section {
+        padding: 15px !important;
+        margin: 20px 0 !important;
+    }
+    
+    #tour-demo-btn {
+        padding: 10px 20px !important;
+        font-size: 15px !important;
+        min-width: 180px !important;
+    }
+}
+
+/* ====================== */
+/*   NAVBAR STYLES        */
+/* ====================== */
+
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    background-color: #4285F4;
+    color: white;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+.nav-left span {
+    font-weight: bold;
+    font-size: 1rem;
+}
+
+.nav-right button {
+    background-color: white;
+    color: #4285F4;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+.nav-right button:hover {
+    background-color: #f1f1f1;
+}
+
+/* ====================== */
+/*   FULL SCREEN OVERLAY  */
+/* ====================== */
+
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.overlay-content {
+    background: white;
+    width: 90%;
+    max-width: 600px;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    text-align: left;
+}
+
+/* Close button */
+.close-btn {
+    float: right;
+    font-size: 26px;
+    font-weight: bold;
+    cursor: pointer;
+    color: #444;
+}
+
+.close-btn:hover {
+    color: red;
+}
+
+/* ====================== */
+/*   RESPONSIVE FIXES     */
+/* ====================== */
+
+@media (max-width: 480px) {
+    header img {
+        width: 160px;
+    }
+
+    header h1 {
+        font-size: 2rem;
+    }
+
+    main h2 {
+        font-size: 1.4rem;
+    }
+
+    #google-signin-btn {
+        font-size: 0.95rem;
+        padding: 12px 18px;
+    }
+    
+    .tour-section p {
+        font-size: 0.95rem !important;
+    }
+    
+    .tour-section p:first-child {
+        font-size: 1rem !important;
+    }
+}
