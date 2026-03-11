@@ -1,5 +1,4 @@
-// sales.js - ONE-TAP BATCH-AWARE SALES SYSTEM (OPTIMIZED FOR SPEED) + BILINGUAL UI
-// OPTIMIZATION: Removed slow local search fallback - now backend only! ⚡
+// sales.js - ONE-TAP BATCH-AWARE SALES SYSTEM (FIXED STOCK CHECKING LOGIC) + BILINGUAL UI
 // EMERGENCY FIX: Added backend data mismatch handling + Fixed search 404 error
 // STAFF FIX: Added proper shop ID resolution for staff logins
 // UX FIX: Results persist after tapping + Professional modern design
@@ -7,7 +6,7 @@
 
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { db } from "./firebase-config.js";
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const FLASK_BACKEND_URL = window.location.origin;
 
@@ -16,9 +15,7 @@ let salesOverlay = null;
 let searchTimeout = null;
 let currentShopId = null;
 let currentUser = null;
-// OPTIMIZATION: Always use backend, NO FALLBACK to local search
-const useBackend = true; 
-const localSearchDisabled = true; // Force backend-only mode
+let useBackend = true; // Try backend first, fallback to local search
 let lastSearchResults = []; // Store last search results for persistence
 let lastSearchQuery = ''; // Store last search query
 
@@ -37,8 +34,8 @@ const NAV_HEIGHT = 64;
 function initBeepSound() {
     try {
         if (!beepAudio) {
-            beepAudio = new Audio('/static/audios/beep.mp3');
-            beepAudio.volume = 0.3; // Set volume to 30% - not too loud
+            beepAudio = new Audio('/static/audios/beep.Mp3');
+            beepAudio.volume = 0.3; // Set volume to 100% - not too loud
             console.log('✅ Beep sound initialized');
         }
     } catch (error) {
@@ -966,10 +963,10 @@ function createSalesOverlay() {
                     <span style="color: #cbd5e1;">•</span>
                     <span style="display: flex; align-items: center; gap: 4px;">🔄 <span>Auto-switch batches</span></span>
                     <span style="color: #cbd5e1;">•</span>
-                    <span style="display: flex; align-items: center; gap: 4px;">⚡ <span>Backend only (fast!)</span></span>
+                    <span style="display: flex; align-items: center; gap: 4px;">🚨 <span>Emergency fix active</span></span>
                 </div>
                 <div style="opacity:0.7; font-size:12px; border-top:1px dashed #e2e8f0; padding-top:6px;">
-                    👆 Gusa mara moja = bidhaa 1 • Mfumo unabadilisha batches • Backend pekee (kasi zaidi!)
+                    👆 Gusa mara moja = bidhaa 1 • Mfumo unabadilisha batches zilizoisha • Dharura imewashwa
                 </div>
             </div>
         </div>
@@ -1005,7 +1002,7 @@ function createSalesOverlay() {
 }
 
 // ====================================================
-// SEARCH FUNCTIONS - OPTIMIZED: BACKEND ONLY! ⚡
+// SEARCH FUNCTIONS - FIXED WITH FALLBACK
 // ====================================================
 
 function clearSearchResults() {
@@ -1118,42 +1115,84 @@ async function onSearchInput(query) {
         }
         
         try {
-            // OPTIMIZATION: BACKEND ONLY - NO FALLBACK!
-            // This ensures we get lightning-fast results from the search index
-            const startTime = Date.now();
-            
-            const res = await fetch(`${FLASK_BACKEND_URL}/sales`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ 
-                    query, 
-                    shop_id: currentShopId,
-                    user_id: currentUser?.uid 
-                })
-            });
+            // Try backend first if it's enabled
+            if (useBackend) {
+                try {
+                    const startTime = Date.now();
+                    
+                    const res = await fetch(`${FLASK_BACKEND_URL}/sales`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ 
+                            query, 
+                            shop_id: currentShopId,
+                            user_id: currentUser?.uid 
+                        })
+                    });
 
-            if (!res.ok) {
-                // Show helpful error but don't fall back to slow local search
-                const errorText = await res.text();
-                throw new Error(`Backend returned ${res.status}: ${errorText}`);
-            }
+                    if (!res.ok) {
+                        throw new Error(`Backend returned ${res.status}`);
+                    }
 
-            const data = await res.json();
-            const searchTime = Date.now() - startTime;
-            
-            console.log(`✅ Search completed in ${searchTime}ms`, {
-                results: data.items?.length || 0,
-                using_index: data.meta?.using_index || false
-            });
-            
-            // Show performance hint
-            if (searchTime > 1000) {
-                console.log(`⚠️ Search took ${searchTime}ms - consider upgrading Render plan for better performance`);
-            } else {
-                console.log(`⚡ Lightning fast! ${searchTime}ms`);
+                    const data = await res.json();
+                    const searchTime = Date.now() - startTime;
+                    
+                    console.log(`✅ Search completed in ${searchTime}ms`, {
+                        results: data.items?.length || 0
+                    });
+                    
+                    if (!data.items?.length) {
+                        results.innerHTML = `
+                            <div style="
+                                display: flex;
+                                flex-direction: column;
+                                align-items: center;
+                                justify-content: center;
+                                min-height: 300px;
+                                color: #64748b;
+                                text-align: center;
+                            ">
+                                <div style="
+                                    width: 100px;
+                                    height: 100px;
+                                    background: white;
+                                    border-radius: 50px;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    margin-bottom: 20px;
+                                ">
+                                    <span style="font-size: 40px;">🔍</span>
+                                </div>
+                                <h3 style="margin:0 0 8px; color: #334155; font-size:18px;">No items found / Hakuna bidhaa</h3>
+                                <p style="margin:0; color: #64748b; font-size:14px;">Try a different search term / Jaribu maneno mengine</p>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    // Store results and render
+                    lastSearchResults = data.items;
+                    lastSearchQuery = query;
+                    renderResults(data.items);
+                    return; // Success! Exit function
+                    
+                } catch (backendError) {
+                    console.log('⚠️ Backend search failed, trying local fallback...', backendError);
+                    useBackend = false; // Disable backend for future searches
+                    // Continue to fallback below
+                }
             }
             
-            if (!data.items?.length) {
+            // ====================================================
+            // FALLBACK: Local search from Firestore
+            // ====================================================
+            console.log('🔍 Using local fallback search for:', query);
+            
+            // Get all categories and items from Firestore
+            const items = await searchLocalFirestore(query);
+            
+            if (!items || items.length === 0) {
                 results.innerHTML = `
                     <div style="
                         display: flex;
@@ -1178,22 +1217,19 @@ async function onSearchInput(query) {
                         </div>
                         <h3 style="margin:0 0 8px; color: #334155; font-size:18px;">No items found / Hakuna bidhaa</h3>
                         <p style="margin:0; color: #64748b; font-size:14px;">Try a different search term / Jaribu maneno mengine</p>
-                        <p style="margin:10px 0 0; color: #94a3b8; font-size:12px;">Search took ${searchTime}ms</p>
                     </div>
                 `;
                 return;
             }
             
             // Store results and render
-            lastSearchResults = data.items;
+            lastSearchResults = items;
             lastSearchQuery = query;
-            renderResults(data.items);
+            renderResults(items);
             
         } catch (error) {
-            console.error('❌ Backend search failed:', error);
+            console.error('❌ Search failed completely:', error);
             
-            // OPTIMIZATION: NO FALLBACK - show error message instead
-            // Local search is disabled because it's too slow on Render
             results.innerHTML = `
                 <div style="
                     display: flex;
@@ -1203,7 +1239,6 @@ async function onSearchInput(query) {
                     min-height: 300px;
                     color: #64748b;
                     text-align: center;
-                    padding: 20px;
                 ">
                     <div style="
                         width: 100px;
@@ -1215,44 +1250,108 @@ async function onSearchInput(query) {
                         justify-content: center;
                         margin-bottom: 20px;
                     ">
-                        <span style="font-size: 40px;">⚠️</span>
+                        <span style="font-size: 40px;">❌</span>
                     </div>
-                    <h3 style="margin:0 0 8px; color: #dc2626; font-size:18px;">Search Unavailable</h3>
-                    <p style="margin:0 0 15px; color: #475569; font-size:14px; max-width: 300px;">
-                        The search service is temporarily unavailable. Please try again in a few moments.
-                    </p>
-                    <p style="margin:0; color: #94a3b8; font-size:12px;">
-                        Error: ${error.message || 'Connection failed'}
-                    </p>
-                    <button onclick="window.location.reload()" style="
-                        margin-top: 20px;
-                        background: #3b82f6;
-                        color: white;
-                        border: none;
-                        padding: 10px 20px;
-                        border-radius: 8px;
-                        font-size: 14px;
-                        cursor: pointer;
-                    ">
-                        Refresh Page / Onyesha upya
-                    </button>
+                    <h3 style="margin:0 0 8px; color: #dc2626; font-size:18px;">Search failed / Imeshindwa kutafuta</h3>
+                    <p style="margin:0; color: #64748b; font-size:14px;">Please try again / Tafadhali jaribu tena</p>
                 </div>
             `;
-            
-            // Show notification
-            showNotification('Search service unavailable. Please try again.', 'error');
         }
     }, 300);
 }
 
 // ====================================================
-// FALLBACK: Local Firestore Search - DISABLED FOR PERFORMANCE ⚡
+// FALLBACK: Local Firestore Search
 // ====================================================
 async function searchLocalFirestore(query) {
-    // OPTIMIZATION: This function is kept but not used
-    // Local search is disabled because it's too slow on Render
-    console.warn('⚠️ Local search is disabled for performance reasons');
-    return [];
+    try {
+        if (!currentShopId) return [];
+        
+        const results = [];
+        const searchTerm = query.toLowerCase();
+        
+        // Get all categories
+        const categoriesRef = collection(db, "Shops", currentShopId, "categories");
+        const categoriesSnap = await getDocs(categoriesRef);
+        
+        for (const categoryDoc of categoriesSnap.docs) {
+            const categoryId = categoryDoc.id;
+            const categoryData = categoryDoc.data();
+            
+            // Get items in this category
+            const itemsRef = collection(db, "Shops", currentShopId, "categories", categoryId, "items");
+            const itemsSnap = await getDocs(itemsRef);
+            
+            itemsSnap.forEach(itemDoc => {
+                const itemData = itemDoc.data();
+                const itemName = (itemData.name || "").toLowerCase();
+                
+                // Simple search matching
+                if (itemName.includes(searchTerm)) {
+                    results.push({
+                        item_id: itemDoc.id,
+                        main_item_id: itemDoc.id,
+                        category_id: categoryId,
+                        category_name: categoryData.name || "Uncategorized",
+                        name: itemData.name,
+                        type: "main_item",
+                        price: itemData.sellPrice || itemData.price || 0,
+                        sellPrice: itemData.sellPrice || itemData.price || 0,
+                        batch_id: itemData.currentBatchId || "default",
+                        batch_remaining: itemData.stock || 0,
+                        batch_name: "Current Stock",
+                        stock: itemData.stock || 0,
+                        thumbnail: itemData.images?.[0] || null,
+                        batch_status: "active"
+                    });
+                }
+            });
+            
+            // Also check for selling units
+            for (const itemDoc of itemsSnap.docs) {
+                const itemId = itemDoc.id;
+                
+                // Check selling units subcollection
+                const sellUnitsRef = collection(db, "Shops", currentShopId, "categories", categoryId, "items", itemId, "sellUnits");
+                const sellUnitsSnap = await getDocs(sellUnitsRef);
+                
+                sellUnitsSnap.forEach(sellDoc => {
+                    const sellData = sellDoc.data();
+                    const sellName = (sellData.name || "").toLowerCase();
+                    
+                    if (sellName.includes(searchTerm)) {
+                        results.push({
+                            item_id: itemId,
+                            sell_unit_id: sellDoc.id,
+                            main_item_id: itemId,
+                            category_id: categoryId,
+                            category_name: categoryData.name || "Uncategorized",
+                            name: sellData.name,
+                            display_name: sellData.name,
+                            type: "selling_unit",
+                            price: sellData.sellPrice || 0,
+                            sellPrice: sellData.sellPrice || 0,
+                            batch_id: "default",
+                            batch_remaining: sellData.stock || 0,
+                            available_stock: sellData.stock || 0,
+                            batch_name: "Selling Unit",
+                            stock: sellData.stock || 0,
+                            thumbnail: sellData.images?.[0]?.thumb || sellData.images?.[0]?.url || null,
+                            conversion_factor: sellData.conversionFactor || sellData.conversion || 1,
+                            batch_status: "active"
+                        });
+                    }
+                });
+            }
+        }
+        
+        console.log(`✅ Local search found ${results.length} items`);
+        return results;
+        
+    } catch (error) {
+        console.error("❌ Local search error:", error);
+        return [];
+    }
 }
 
 // ====================================================
@@ -1496,7 +1595,7 @@ function renderItemCard(item, resultsContainer) {
                         font-size: 24px;
                         flex-shrink:0;
                     ">
-                        KSh ${price.toFixed(2)}
+                        $${price.toFixed(2)}
                     </div>
                     ${item.batch_name ? `
                         <div style="
@@ -1787,7 +1886,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     console.log('✅ Sales system ready');
     console.log('🚨 EMERGENCY FIX ACTIVE: Handling frontend/backend stock mismatch');
-    console.log('⚡ OPTIMIZATION: Local search DISABLED - backend only!');
+    console.log('🔧 SEARCH FIX: Added local fallback search when backend is unavailable');
     console.log('👥 STAFF FIX: Proper shop ID resolution for staff logins');
     console.log('🎨 UX FIX: Results persist after tapping + Professional design');
     console.log('🔊 AUDIO FIX: Added beep sound when tapping items');
@@ -1801,9 +1900,10 @@ document.addEventListener("DOMContentLoaded", () => {
 ║ • No quantity prompts                    ║
 ║ • Integrated with cart-icon.js           ║
 ║ • Press Alt+S to open sales              ║
-║ • ⚡ BACKEND ONLY - FAST SEARCH!          ║
 ║ • 🚨 EMERGENCY FIX: Frontend/Backend     ║
 ║   data mismatch handling                 ║
+║ • 🔧 SEARCH FIX: Local Firestore fallback║
+║   when backend is unavailable             ║
 ║ • 👥 STAFF FIX: Proper shop ID resolution║
 ║   for staff logins                        ║
 ║ • 🎨 UX FIX: Results persist after tapping║

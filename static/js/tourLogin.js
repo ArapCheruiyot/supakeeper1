@@ -75,8 +75,27 @@ export async function handleDemoLogin() {
         localStorage.setItem("activeShopId", shopId);
         localStorage.setItem("activeShopName", DEMO_SHOP.name);
         
-        console.log("🎉 Demo setup complete! Redirecting...");
-        window.location.href = "/dashboard";
+        // ========== UPDATED: Clear any old flags first ==========
+        console.log("🎉 Demo setup complete! Setting flags for dashboard...");
+        
+        // Clear any existing flags to avoid conflicts
+        localStorage.removeItem("freshDemoLogin");
+        
+        // Set flag for dashboard to show loading state
+        localStorage.setItem("freshDemoLogin", "true");
+        
+        // Also set a timestamp to track when login happened
+        localStorage.setItem("demoLoginTime", Date.now().toString());
+        
+        console.log("⏱️ Demo login timestamp set");
+        
+        // Small delay to let Firebase finish writing
+        setTimeout(() => {
+            console.log("➡️ Redirecting to dashboard...");
+            window.location.href = "/dashboard";
+        }, 1500); // 1.5 second delay
+        
+        // ========== END OF UPDATED SECTION ==========
         
     } catch (error) {
         console.error("❌ Demo login failed:", error);
