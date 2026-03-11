@@ -7,9 +7,10 @@ const DEMO_ACCOUNT = {
     password: "SUPAKIPA@123"
 };
 
-// Demo shop settings
+// Demo shop settings - USE THE SAME SHOP FOR ALL DEMO USERS
 const DEMO_SHOP = {
     name: "Superkeeper Demo Shop",
+    id: "demo-shop-supakeeper",  // ← FIXED ID for all demo users
     plan: "BASIC",
     isDemo: true
 };
@@ -41,34 +42,29 @@ export async function handleDemoLogin() {
         const user = userCredential.user;
         console.log("✅ Demo login successful:", user.email);
         
-        // Check if user has a shop document
-        const userDocRef = doc(db, "users", user.uid);
-        const userDoc = await getDoc(userDocRef);
+        // ========== IMPORTANT CHANGE: Use FIXED shop ID ==========
+        const shopId = DEMO_SHOP.id;  // ← USE THE SAME SHOP FOR EVERYONE!
         
-        if (!userDoc.exists()) {
-            console.log("📝 Creating demo user document...");
-            await setDoc(userDocRef, {
-                email: user.email,
-                displayName: "Demo User",
-                role: "owner",
+        // Check if shop exists (it should, since it's the main demo shop)
+        const shopDocRef = doc(db, "Shops", shopId);
+        const shopDoc = await getDoc(shopDocRef);
+        
+        if (!shopDoc.exists()) {
+            console.log("⚠️ Main demo shop not found! Creating...");
+            // Create main demo shop only if it doesn't exist
+            await setDoc(shopDocRef, {
+                shopName: DEMO_SHOP.name,
+                ownerId: user.uid,
+                plan: DEMO_SHOP.plan,
+                isDemo: true,
                 createdAt: new Date(),
-                isDemo: true
+                isMainDemo: true
             });
+        } else {
+            console.log("✅ Using existing main demo shop");
         }
         
-        // Create demo shop if needed
-        const shopId = "demo-shop-" + Date.now();
-        const shopDocRef = doc(db, "Shops", shopId);
-        await setDoc(shopDocRef, {
-            shopName: DEMO_SHOP.name,
-            ownerId: user.uid,
-            plan: DEMO_SHOP.plan,
-            isDemo: true,
-            createdAt: new Date()
-        });
-        
-        // Update user with shop ID
-        await setDoc(userDocRef, { shopId: shopId }, { merge: true });
+        // ========== END OF CHANGE ==========
         
         // Set demo session
         localStorage.setItem("isDemoMode", "true");
@@ -89,11 +85,14 @@ export async function handleDemoLogin() {
         
         console.log("⏱️ Demo login timestamp set");
         
+        // Show loading message to user
+        alert("🎮 Setting up your demo experience... This will take 10-15 seconds first time only!");
+        
         // Small delay to let Firebase finish writing
         setTimeout(() => {
             console.log("➡️ Redirecting to dashboard...");
             window.location.href = "/dashboard";
-        }, 1500); // 1.5 second delay
+        }, 2000); // 2 second delay
         
         // ========== END OF UPDATED SECTION ==========
         
