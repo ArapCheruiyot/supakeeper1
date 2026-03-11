@@ -408,6 +408,23 @@ embedding_cache_full = {
     "total_shops": 0
 }
 
+# ======================================================
+# DEBOUNCING FOR CACHE REFRESHES (ADDED TO PREVENT MULTIPLE REFRESHES)
+# ======================================================
+import threading
+import time
+
+_last_refresh_time = 0
+_refresh_timer = None
+REFRESH_COOLDOWN = 30  # Minimum seconds between refreshes
+REFRESH_DELAY = 2      # Wait 2 seconds for multiple changes
+
+
+
+
+
+
+
 def refresh_full_item_cache():
     """REVISED: Includes ALL items with BATCH tracking and selling units with batch links"""
     start = time.time()
@@ -552,15 +569,50 @@ def refresh_full_item_cache():
     
     return shops_result
 
+# ======================================================
+# DEBOUNCED CACHE REFRESH FUNCTION
+# ======================================================
+def debounced_refresh_cache():
+    """Debounced cache refresh to prevent multiple refreshes"""
+    global _last_refresh_time, _refresh_timer
+    
+    def do_refresh():
+        global _last_refresh_time
+        current_time = time.time()
+        
+        # Check if we've refreshed too recently
+        if current_time - _last_refresh_time < REFRESH_COOLDOWN:
+            print(f"⏱️ Cache refresh skipped - last refresh was {round(current_time - _last_refresh_time, 1)}s ago")
+            return
+        
+        print("[LISTENER] Changes detected → refreshing FULL cache (debounced)")
+        refresh_full_item_cache()
+        _last_refresh_time = time.time()
+    
+    # Cancel any pending refresh
+    if _refresh_timer:
+        _refresh_timer.cancel()
+    
+    # Schedule new refresh with delay
+    _refresh_timer = threading.Timer(REFRESH_DELAY, do_refresh)
+    _refresh_timer.start()
+
+
+
+
+
+
 def on_full_item_snapshot(col_snapshot, changes, read_time):
-    """Listener for changes to main items"""
-    print("[LISTENER] Main items changed → refreshing FULL cache")
-    refresh_full_item_cache()
+    """Listener for changes to main items - DEBOUNCED"""
+    print("[LISTENER] Main items changed → scheduling cache refresh")
+    debounced_refresh_cache()
+
 
 def on_selling_units_snapshot(col_snapshot, changes, read_time):
-    """Listener for changes to selling units"""
-    print("[LISTENER] Selling units changed → refreshing FULL cache")
-    refresh_full_item_cache()
+    """Listener for changes to selling units - DEBOUNCED"""
+    print("[LISTENER] Selling units changed → scheduling cache refresh")
+    debounced_refresh_cache()
+
 
 # ======================================================
 # BATCH-AWARE FIFO HELPER FUNCTIONS
@@ -1306,4 +1358,5 @@ except Exception as e:
 # This block ONLY runs for local development
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
+
     app.run(host="0.0.0.0", port=port, debug=True)
