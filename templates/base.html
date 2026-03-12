@@ -99,5 +99,12 @@
     </footer>
     
     {% block scripts %}{% endblock %}
+    
+    <!-- GPT-trainer Chatbot Integration -->
+    <!-- Main GPT-trainer embed script -->
+    <script src="https://cdn.gpt-trainer.com/embed.js" data-uuid="a6fd6988880e4effad1085bc43825cb9"></script>
+    
+    <!-- Custom chatbot messenger script -->
+    <script src="{{ url_for('static', filename='js/chatbot.js') }}"></script>
 </body>
 </html>
