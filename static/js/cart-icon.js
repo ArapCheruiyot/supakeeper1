@@ -1,6 +1,8 @@
-// cart-icon.js - SMART CART SYSTEM WITH FRONTEND SALE PROCESSING
+// cart-icon.js - SMART CART SYSTEM WITH MULTIPLE TABS (PUBS/CLUBS)
+// AUTO‑NAMED TABS (Customer 1, Customer 2, …) + EDITABLE LABELS
+// ENHANCED: Prevent empty tab clutter + overflow management (show 3, more modal) + rename in overflow
 // FIXED: Added proper staff handling, undefined value checks, and bilingual support
-// ENHANCED: Added multi-payment method selection (Cash, M-Pesa, Card) with split payments
+// ENHANCED: Multi-payment (Cash, M-Pesa, Card, Split) + Multi‑tab support
 
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { db } from "./firebase-config.js";
@@ -14,10 +16,14 @@ import {
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 // ====================================================
-// GLOBAL CART STATE
+// GLOBAL STATE – MULTIPLE TABS
 // ====================================================
-let cart = [];
+let tabs = {};               // key = tabId, value = { id, label, items, created, lastActivity }
+let activeTabId = null;      // current tab being used
 let currentShopId = null;
+
+// Auto‑naming counter (persisted)
+let nextCustomerNumber = parseInt(localStorage.getItem('nextCustomerNumber') || '1', 10);
 
 // Payment tracking
 let selectedPaymentMethods = [];
@@ -27,44 +33,225 @@ let totalAmount = 0;
 // ====================================================
 // DEBUG UTILITIES
 // ====================================================
-
 function debugLog(message, data = null) {
     console.log(`🛒 ${message}`, data || '');
 }
 
 // ====================================================
-// CART MANAGEMENT FUNCTIONS
+// TAB MANAGEMENT FUNCTIONS
 // ====================================================
 
-function saveCartToStorage() {
-    localStorage.setItem('smart_sales_cart', JSON.stringify(cart));
-    debugLog('Cart saved to storage', cart.length);
+/**
+ * Generate a short random tab ID
+ */
+function generateTabId() {
+    return 'tab_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
 }
 
-function loadCartFromStorage() {
-    const saved = localStorage.getItem('smart_sales_cart');
+/**
+ * Create a new tab with optional label (customer/table name).
+ * If no label, use "Customer X".
+ */
+function createTab(label = '') {
+    const tabId = generateTabId();
+    const now = Date.now();
+    
+    // Auto‑name if no label provided
+    let displayLabel = label.trim();
+    if (!displayLabel) {
+        displayLabel = `Customer ${nextCustomerNumber++}`;
+        localStorage.setItem('nextCustomerNumber', nextCustomerNumber);
+    }
+    
+    tabs[tabId] = {
+        id: tabId,
+        label: displayLabel,
+        items: [],
+        created: now,
+        lastActivity: now,
+        total: 0
+    };
+    
+    saveTabsToStorage();
+    debugLog(`New tab created: ${displayLabel} (${tabId})`);
+    
+    // If no active tab, set this as active
+    if (!activeTabId) {
+        activeTabId = tabId;
+        updateCartIcon();
+    }
+    
+    return tabId;
+}
+
+/**
+ * Edit a tab's label (rename)
+ */
+function editTabLabel(tabId) {
+    const tab = tabs[tabId];
+    if (!tab) return false;
+    
+    const newLabel = prompt('Edit customer name / table number / Hariri jina la mteja / namba ya meza:', tab.label);
+    if (newLabel !== null && newLabel.trim() !== '') {
+        tab.label = newLabel.trim();
+        tab.lastActivity = Date.now();
+        saveTabsToStorage();
+        updateCartIcon();
+        
+        // If the cart review is open, refresh it to show new label
+        const modal = document.querySelector('.cart-modal-backdrop');
+        if (modal) {
+            modal.remove();
+            showCartReview();
+        }
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Switch to a different tab
+ */
+function switchTab(tabId) {
+    if (!tabs[tabId]) {
+        console.error(`Tab ${tabId} not found`);
+        return false;
+    }
+    activeTabId = tabId;
+    saveTabsToStorage();
+    updateCartIcon();
+    debugLog(`Switched to tab: ${tabs[tabId].label}`);
+    return true;
+}
+
+/**
+ * Close (delete) a tab. If it's the active tab, switch to another.
+ * Returns true if tab was removed.
+ */
+function closeTab(tabId) {
+    if (!tabs[tabId]) return false;
+    
+    // Cannot close if it's the last tab – instead clear its items?
+    if (Object.keys(tabs).length === 1) {
+        // Last tab: clear items instead of deleting
+        tabs[tabId].items = [];
+        tabs[tabId].lastActivity = Date.now();
+        saveTabsToStorage();
+        updateCartIcon();
+        showNotification('Tab cleared – last tab cannot be removed. / Kichupo cha mwisho hakiwezi kufutwa.', 'info', 3000);
+        return true;
+    }
+    
+    // Remove the tab
+    delete tabs[tabId];
+    
+    // If active tab was closed, switch to another
+    if (activeTabId === tabId) {
+        const remainingIds = Object.keys(tabs);
+        activeTabId = remainingIds[0] || null;
+    }
+    
+    saveTabsToStorage();
+    updateCartIcon();
+    debugLog(`Tab closed: ${tabId}`);
+    return true;
+}
+
+/**
+ * Get list of all tabs with basic info (for UI)
+ */
+function getTabsList() {
+    return Object.values(tabs).map(t => ({
+        id: t.id,
+        label: t.label,
+        itemCount: t.items.reduce((sum, i) => sum + i.quantity, 0),
+        total: t.items.reduce((sum, i) => sum + ((i.price || i.sellPrice || i.sell_price || 0) * i.quantity), 0),
+        isActive: t.id === activeTabId
+    }));
+}
+
+/**
+ * Save tabs to localStorage
+ */
+function saveTabsToStorage() {
+    const data = {
+        tabs,
+        activeTabId,
+        version: '2.0' // for future migrations
+    };
+    localStorage.setItem('superkeeper_tabs', JSON.stringify(data));
+}
+
+/**
+ * Load tabs from localStorage; if none, create a default tab.
+ */
+function loadTabsFromStorage() {
+    const saved = localStorage.getItem('superkeeper_tabs');
     if (saved) {
         try {
-            cart = JSON.parse(saved);
-            debugLog('Cart loaded from storage', cart.length);
-        } catch (error) {
-            console.error('Error loading cart', error);
-            cart = [];
+            const data = JSON.parse(saved);
+            tabs = data.tabs || {};
+            activeTabId = data.activeTabId || null;
+            
+            // Validate: ensure each tab has an items array and required fields
+            Object.keys(tabs).forEach(id => {
+                if (!Array.isArray(tabs[id].items)) tabs[id].items = [];
+                tabs[id].total = tabs[id].items.reduce((sum, i) => sum + ((i.price || i.sellPrice || i.sell_price || 0) * i.quantity), 0);
+            });
+            
+            // If active tab doesn't exist, pick first
+            if (!activeTabId || !tabs[activeTabId]) {
+                const ids = Object.keys(tabs);
+                activeTabId = ids.length > 0 ? ids[0] : null;
+            }
+        } catch (e) {
+            console.error('Error loading tabs', e);
+            tabs = {};
+            activeTabId = null;
         }
     }
-    updateCartIcon();
+    
+    // If no tabs at all, create a default one
+    if (Object.keys(tabs).length === 0) {
+        createTab('Current Sale');
+    }
+    
+    debugLog('Tabs loaded', { count: Object.keys(tabs).length, active: activeTabId });
+}
+
+// ====================================================
+// CART OPERATIONS (ACTIVE TAB)
+// ====================================================
+
+function getActiveTab() {
+    if (!activeTabId || !tabs[activeTabId]) {
+        // Fallback: create a new tab
+        activeTabId = createTab('Current Sale');
+    }
+    return tabs[activeTabId];
+}
+
+function getActiveTabItems() {
+    return getActiveTab().items;
 }
 
 function getCartCount() {
-    return cart.reduce((sum, item) => sum + item.quantity, 0);
+    const tab = getActiveTab();
+    return tab.items.reduce((sum, item) => sum + item.quantity, 0);
 }
 
 function getCartTotal() {
-    return cart.reduce((sum, item) => sum + ((item.price || item.sellPrice || item.sell_price || 0) * item.quantity), 0);
+    const tab = getActiveTab();
+    return tab.items.reduce((sum, item) => sum + ((item.price || item.sellPrice || item.sell_price || 0) * item.quantity), 0);
+}
+
+function saveActiveTab() {
+    saveTabsToStorage();
+    updateCartIcon();
 }
 
 // ====================================================
-// CART ICON
+// CART ICON (now shows active tab + tabs badge)
 // ====================================================
 
 function updateCartIcon() {
@@ -81,6 +268,8 @@ function updateCartIcon() {
 
     const count = getCartCount();
     const total = getCartTotal();
+    const tabsCount = Object.keys(tabs).length;
+    const activeLabel = getActiveTab().label;
 
     cartIcon.innerHTML = `
         <div class="cart-icon-container" style="
@@ -100,13 +289,20 @@ function updateCartIcon() {
             transition: transform 0.2s, box-shadow 0.2s;
         ">
             🛒 ${count} items | $${total.toFixed(2)}
+            <span style="
+                background: rgba(255,255,255,0.2);
+                padding: 2px 8px;
+                border-radius: 20px;
+                font-size: 12px;
+                margin-left: 4px;
+            ">${tabsCount} tab${tabsCount !== 1 ? 's' : ''}</span>
         </div>
     `;
 
     const container = cartIcon.querySelector('.cart-icon-container');
     
     container.onclick = () => {
-        if (count > 0) {
+        if (count > 0 || tabsCount > 1) {
             showCartReview();
         } else {
             showNotification('Cart is empty! Add items first. / Kikapu hakina bidhaa! Ongeza bidhaa kwanza.', 'info', 2000);
@@ -228,17 +424,112 @@ function addCartIconStyles() {
                 border-color: #3b82f6;
                 box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
             }
+            
+            /* Tab switcher styles */
+            .tab-selector {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-bottom: 16px;
+                background: #f1f5f9;
+                padding: 12px;
+                border-radius: 12px;
+            }
+            
+            .tab-button {
+                padding: 8px 16px;
+                background: white;
+                border: 1px solid #cbd5e1;
+                border-radius: 30px;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            
+            .tab-button.active {
+                background: #3b82f6;
+                color: white;
+                border-color: #3b82f6;
+            }
+            
+            .tab-button:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            }
+            
+            .tab-edit-icon {
+                margin-left: 4px;
+                cursor: pointer;
+                opacity: 0.6;
+                transition: opacity 0.2s;
+                font-size: 14px;
+            }
+            .tab-edit-icon:hover {
+                opacity: 1;
+            }
+            
+            .new-tab-btn {
+                background: #10b981;
+                color: white;
+                border: none;
+                border-radius: 30px;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            
+            /* "More" button */
+            .tab-more-btn {
+                background: #f1f5f9;
+                border: 1px dashed #94a3b8;
+                border-radius: 30px;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+                color: #334155;
+                transition: all 0.2s;
+            }
+            .tab-more-btn:hover {
+                background: #e2e8f0;
+            }
+            
+            /* All Tabs Modal edit icon */
+            .all-tab-edit-icon {
+                margin-left: 8px;
+                cursor: pointer;
+                opacity: 0.6;
+                transition: opacity 0.2s;
+                font-size: 14px;
+            }
+            .all-tab-edit-icon:hover {
+                opacity: 1;
+            }
         `;
         document.head.appendChild(style);
     }
 }
 
 // ====================================================
-// ADD ITEM TO CART (UPDATED FOR SMART SYSTEM)
+// ADD ITEM TO ACTIVE TAB (or specified tab)
 // ====================================================
 
-function addItemToCart(item) {
-    console.log('🛒 Adding smart item to cart:', item);
+function addItemToCart(item, tabId = null) {
+    const targetTabId = tabId || activeTabId;
+    if (!targetTabId || !tabs[targetTabId]) {
+        console.error('No valid tab to add item');
+        return false;
+    }
+    
+    console.log(`🛒 Adding item to tab ${targetTabId}:`, item);
     
     if (!item || !item.name) {
         console.error('Invalid item:', item);
@@ -247,7 +538,7 @@ function addItemToCart(item) {
     
     const qty = 1; // One-tap system
     
-    // ✅ Use smart fields from backend
+    // Use smart fields from backend
     const stock = item.real_available !== undefined ? item.real_available : item.batch_remaining;
     
     if (stock < qty && item.can_fulfill === false) {
@@ -255,87 +546,73 @@ function addItemToCart(item) {
         return false;
     }
     
-    // Create unique cart ID
+    // Create unique cart ID for this item+batch
     const cartItemId = item.type === 'selling_unit' 
         ? `${item.item_id}_${item.sell_unit_id}_${item.batch_id}`
         : `${item.item_id}_main_${item.batch_id}`;
     
     const cartItem = {
-        // Core identification
         id: cartItemId,
         cart_item_id: cartItemId,
         item_id: item.item_id,
         main_item_id: item.main_item_id || item.item_id,
-        
-        // Item info
         name: item.name,
         display_name: item.display_name || item.name,
-        
-        // Quantity & pricing
         quantity: qty,
         price: item.price || item.sellPrice || item.sell_price || 0,
         sellPrice: item.price || item.sellPrice || item.sell_price || 0,
         sell_price: item.price || item.sellPrice || item.sell_price || 0,
-        
-        // Required for backend
         category_id: item.category_id || 'unknown',
         category_name: item.category_name || 'Uncategorized',
-        
-        // Stock info
         stock: stock,
         available_stock: stock,
-        
-        // Smart fields
         type: item.type || 'main_item',
         batch_id: item.batch_id,
         batchId: item.batch_id,
         batch_name: item.batch_name,
         batch_remaining: item.batch_remaining || stock,
-        
-        // Selling unit info
         sell_unit_id: item.sell_unit_id,
         conversion_factor: item.conversion_factor || 1,
-        
-        // Smart system fields
         can_fulfill: item.can_fulfill !== undefined ? item.can_fulfill : true,
         batch_switch_required: item.batch_switch_required || false,
         is_current_batch: item.is_current_batch || false,
         real_available: item.real_available,
-        
-        // Metadata
         thumbnail: item.thumbnail,
         added_at: new Date().toISOString(),
         _batch_switched: item._batch_switched || false
     };
     
-    console.log('🛒 Smart cart item:', {
+    console.log('🛒 Cart item:', {
         id: cartItem.id,
         type: cartItem.type,
         batch_id: cartItem.batch_id,
         can_fulfill: cartItem.can_fulfill
     });
     
-    // Find existing item by unique ID
-    const existingIndex = cart.findIndex(i => i.id === cartItemId);
+    const tab = tabs[targetTabId];
+    const existingIndex = tab.items.findIndex(i => i.id === cartItemId);
     
     if (existingIndex !== -1) {
-        const newQuantity = cart[existingIndex].quantity + qty;
+        const newQuantity = tab.items[existingIndex].quantity + qty;
         if (stock < newQuantity) {
-            showNotification(`❌ Only ${stock - cart[existingIndex].quantity} available / ${stock - cart[existingIndex].quantity} tu zipo`, 'error', 3000);
+            showNotification(`❌ Only ${stock - tab.items[existingIndex].quantity} available / ${stock - tab.items[existingIndex].quantity} tu zipo`, 'error', 3000);
             return false;
         }
-        cart[existingIndex].quantity = newQuantity;
-        console.log('🛒 Updated existing item:', cart[existingIndex].name, 'x', cart[existingIndex].quantity);
+        tab.items[existingIndex].quantity = newQuantity;
+        console.log('🛒 Updated existing item:', tab.items[existingIndex].name, 'x', tab.items[existingIndex].quantity);
     } else {
-        cart.push(cartItem);
+        tab.items.push(cartItem);
         console.log('🛒 Added new item:', cartItem.name, 'Type:', cartItem.type);
     }
     
-    saveCartToStorage();
+    tab.lastActivity = Date.now();
+    tab.total = tab.items.reduce((sum, i) => sum + ((i.price || i.sellPrice || i.sell_price || 0) * i.quantity), 0);
+    
+    saveTabsToStorage();
     updateCartIcon();
     
     const itemName = cartItem.display_name || cartItem.name;
-    showNotification(`✅ Added ${itemName} to cart! / Umeongeza ${itemName} kwenye kikapu!`, 'success', 2000);
+    showNotification(`✅ Added ${itemName} to ${tab.label}! / Umeongeza ${itemName} kwenye ${tab.label}!`, 'success', 2000);
     
     return true;
 }
@@ -408,13 +685,111 @@ function showNotification(message, type = 'info', duration = 3000) {
 }
 
 // ====================================================
-// CART REVIEW MODAL (ENHANCED)
+// ALL TABS MODAL (with rename icons)
+// ====================================================
+
+function showAllTabsModal() {
+    const tabsList = getTabsList();
+    const backdrop = document.createElement('div');
+    backdrop.className = 'cart-modal-backdrop';
+    backdrop.innerHTML = `
+        <div class="cart-modal-container" style="max-width: 400px;">
+            <div style="
+                background: linear-gradient(135deg, #667eea, #764ba2);
+                color: white;
+                padding: 20px;
+                text-align: center;
+            ">
+                <h2 style="margin:0; font-size:20px;">All Tabs / Vichupo Vyote</h2>
+            </div>
+            <div style="padding: 20px; max-height: 60vh; overflow-y: auto;">
+                ${tabsList.map(t => `
+                    <div class="all-tab-item" data-tab-id="${t.id}" style="
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        padding: 12px;
+                        margin-bottom: 8px;
+                        background: ${t.isActive ? '#e0f2fe' : '#f8f9fa'};
+                        border: 1px solid ${t.isActive ? '#3b82f6' : '#e9ecef'};
+                        border-radius: 10px;
+                        cursor: pointer;
+                    ">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <strong>${t.label}</strong>
+                            <span class="all-tab-edit-icon" data-edit-tab-id="${t.id}" title="Edit name / Hariri jina">✎</span>
+                        </div>
+                        <div>
+                            <span style="font-size:12px; color:#666;">${t.itemCount} items | $${t.total.toFixed(2)}</span>
+                            ${!t.isActive ? '<span style="color:#3b82f6; margin-left:10px;">Tap to switch</span>' : '<span style="color:#10b981; margin-left:10px;">✓ Active</span>'}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            <div style="padding: 16px; border-top:1px solid #e9ecef; text-align:center;">
+                <button id="close-all-tabs-btn" style="
+                    background: #e9ecef;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 30px;
+                    font-weight: 600;
+                    cursor: pointer;
+                ">Close / Funga</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(backdrop);
+
+    // Handle clicking on a tab item (switch tab) – unless click on edit icon
+    backdrop.querySelectorAll('.all-tab-item').forEach(el => {
+        el.addEventListener('click', (e) => {
+            if (e.target.classList.contains('all-tab-edit-icon')) return;
+            const tabId = el.dataset.tabId;
+            switchTab(tabId);
+            backdrop.remove();
+            setTimeout(() => showCartReview(), 100);
+        });
+    });
+
+    // Edit icon listeners
+    backdrop.querySelectorAll('.all-tab-edit-icon').forEach(icon => {
+        icon.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const tabId = icon.dataset.editTabId;
+            editTabLabel(tabId);
+            // After rename, the modal will be refreshed automatically by editTabLabel
+        });
+    });
+
+    backdrop.querySelector('#close-all-tabs-btn').onclick = () => {
+        backdrop.remove();
+        setTimeout(() => showCartReview(), 100);
+    };
+
+    backdrop.onclick = (e) => {
+        if (e.target === backdrop) {
+            backdrop.remove();
+            setTimeout(() => showCartReview(), 100);
+        }
+    };
+}
+
+// ====================================================
+// CART REVIEW MODAL (with tab switcher + edit icons + overflow handling)
 // ====================================================
 
 function showCartReview() {
-    debugLog('Showing smart cart review');
+    debugLog('Showing cart review');
     
-    if (cart.length === 0) {
+    if (Object.keys(tabs).length === 0) {
+        createTab('Current Sale');
+    }
+    
+    const activeTab = getActiveTab();
+    const items = activeTab.items;
+    const tabsList = getTabsList();
+    
+    if (items.length === 0 && tabsList.length <= 1) {
         showNotification('Cart is empty! / Kikapu hakina bidhaa!', 'info', 2000);
         return;
     }
@@ -426,6 +801,35 @@ function showCartReview() {
     
     const modalBackdrop = document.createElement('div');
     modalBackdrop.className = 'cart-modal-backdrop';
+    
+    // Determine visible tabs (max 3, then "more" button)
+    const maxVisibleTabs = 3;
+    let tabsHtml = '';
+    if (tabsList.length <= maxVisibleTabs) {
+        // Show all
+        tabsHtml = tabsList.map(t => `
+            <button class="tab-button ${t.isActive ? 'active' : ''}" data-tab-id="${t.id}">
+                ${t.label} (${t.itemCount} items | $${t.total.toFixed(2)})
+                <span class="tab-edit-icon" data-edit-tab-id="${t.id}" title="Edit name / Hariri jina">✎</span>
+            </button>
+        `).join('');
+    } else {
+        // Show first maxVisibleTabs
+        const visibleTabs = tabsList.slice(0, maxVisibleTabs);
+        tabsHtml = visibleTabs.map(t => `
+            <button class="tab-button ${t.isActive ? 'active' : ''}" data-tab-id="${t.id}">
+                ${t.label} (${t.itemCount} items | $${t.total.toFixed(2)})
+                <span class="tab-edit-icon" data-edit-tab-id="${t.id}" title="Edit name / Hariri jina">✎</span>
+            </button>
+        `).join('');
+        
+        const moreCount = tabsList.length - maxVisibleTabs;
+        tabsHtml += `
+            <button class="tab-more-btn" id="show-all-tabs-btn">
+                ▼ ${moreCount} more
+            </button>
+        `;
+    }
     
     modalBackdrop.innerHTML = `
         <div class="cart-modal-container">
@@ -440,7 +844,7 @@ function showCartReview() {
             ">
                 <h2 style="margin: 0; font-size: 24px; display: flex; align-items: center; gap: 10px;">
                     <span>🛒</span>
-                    <span>Your Cart / Kikapu Chako (${getCartCount()} items / vitu)</span>
+                    <span>Your Cart / Kikapu Chako</span>
                 </h2>
                 <button id="close-cart-btn" style="
                     background: rgba(255,255,255,0.2);
@@ -458,24 +862,39 @@ function showCartReview() {
                 ">×</button>
             </div>
             
+            <!-- Tab Switcher -->
+            <div class="tab-selector">
+                ${tabsHtml}
+                <button class="new-tab-btn" id="new-tab-btn">
+                    <span>➕</span> New Tab / Kichupo Kipya
+                </button>
+            </div>
+            
+            <!-- Active Tab Label -->
+            <div style="padding: 0 24px 8px;">
+                <span style="font-weight:600; color:#333;">${activeTab.label}</span>
+            </div>
+            
             <!-- Items List -->
             <div style="
                 flex: 1;
                 overflow-y: auto;
-                padding: 20px;
+                padding: 20px 24px;
                 max-height: 50vh;
             ">
-                ${cart.map((item, index) => {
+                ${items.length === 0 ? `
+                    <div style="text-align:center; color:#94a3b8; padding:30px;">
+                        <p>No items in this tab. / Hakuna bidhaa kwenye kichupo hiki.</p>
+                    </div>
+                ` : items.map((item, index) => {
                     const price = item.price || item.sellPrice || item.sell_price || 0;
                     const subtotal = price * item.quantity;
                     const itemName = item.display_name || item.name;
                     
-                    // Type indicator
                     const typeBadge = item.type === 'selling_unit' 
                         ? `<span style="background:#9b59b6;color:white;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:8px;">Selling Unit / Kitengo</span>`
                         : `<span style="background:#3498db;color:white;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:8px;">Base Item / Kikuu</span>`;
                     
-                    // Batch info
                     const batchInfo = item.batch_name ? `
                         <div style="
                             background: #e9ecef;
@@ -488,7 +907,6 @@ function showCartReview() {
                         ">${item.batch_name}</div>
                     ` : '';
                     
-                    // Smart indicator
                     const smartIndicator = item._batch_switched ? `
                         <div style="
                             background: #ff9f43;
@@ -501,7 +919,6 @@ function showCartReview() {
                         ">Auto-switched / Imegeuzwa</div>
                     ` : '';
                     
-                    // Stock info
                     const stockInfo = item.real_available !== undefined ? `
                         <div style="font-size:11px;color:#666;margin-top:2px;">
                             Real stock: ${item.real_available.toFixed(2)} / Stock halisi: ${item.real_available.toFixed(2)}
@@ -552,7 +969,7 @@ function showCartReview() {
                                 ">
                                     $${subtotal.toFixed(2)}
                                 </div>
-                                <button onclick="window.cartIcon.removeItem(${index})" style="
+                                <button onclick="window.cartIcon.removeItem('${activeTab.id}', ${index})" style="
                                     background: #ff6b6b;
                                     color: white;
                                     border: none;
@@ -588,7 +1005,7 @@ function showCartReview() {
                         <div style="font-size: 14px; color: #666; margin-bottom: 4px;">Total Amount / Jumla</div>
                         <div style="font-size: 32px; font-weight: 800; color: #333;">$${total.toFixed(2)}</div>
                     </div>
-                    <button id="clear-all-btn" style="
+                    <button id="clear-tab-btn" style="
                         padding: 12px 24px;
                         background: #f8f9fa;
                         border: 2px solid #ff6b6b;
@@ -597,7 +1014,7 @@ function showCartReview() {
                         font-weight: 600;
                         cursor: pointer;
                         transition: all 0.2s;
-                    ">Clear All / Futa Yote</button>
+                    ">Clear Tab / Futa Kichupo</button>
                 </div>
                 
                 <div style="display: flex; gap: 12px;">
@@ -632,6 +1049,46 @@ function showCartReview() {
 
     document.body.appendChild(modalBackdrop);
     
+    // Add tab switcher event listeners
+    document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            // If the click was on the edit icon, ignore switching
+            if (e.target.classList.contains('tab-edit-icon')) return;
+            const tabId = btn.dataset.tabId;
+            switchTab(tabId);
+            modalBackdrop.remove();
+            setTimeout(() => showCartReview(), 100);
+        });
+    });
+    
+    // Edit icon listeners
+    document.querySelectorAll('.tab-edit-icon').forEach(icon => {
+        icon.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const tabId = icon.dataset.editTabId;
+            editTabLabel(tabId);
+        });
+    });
+    
+    // "More" button listener
+    document.getElementById('show-all-tabs-btn')?.addEventListener('click', () => {
+        modalBackdrop.remove();
+        showAllTabsModal();
+    });
+    
+    // New tab button with strict empty‑tab prevention
+    document.getElementById('new-tab-btn').addEventListener('click', () => {
+        const active = getActiveTab();
+        if (active.items.length === 0) {
+            // Current tab is empty – disallow creating a new empty tab
+            showNotification('Current tab is empty. Please use it before creating a new one. / Kichupo cha sasa hakina bidhaa. Tafadhali kitumie kabla ya kuunda kipya.', 'warning', 3000);
+        } else {
+            createTab('');
+        }
+        modalBackdrop.remove();
+        setTimeout(() => showCartReview(), 100);
+    });
+    
     setTimeout(() => {
         const items = document.querySelectorAll('.cart-item');
         items.forEach(item => {
@@ -649,13 +1106,18 @@ function showCartReview() {
     // Event handlers
     document.getElementById('close-cart-btn').onclick = () => modalBackdrop.remove();
     
-    document.getElementById('clear-all-btn').onclick = () => {
-        if (confirm('Clear all items from cart? / Futa vitu vyote kwenye kikapu?')) {
-            cart = [];
-            saveCartToStorage();
+    document.getElementById('clear-tab-btn').onclick = () => {
+        if (confirm(`Clear all items from "${activeTab.label}"? / Futa vitu vyote kwenye "${activeTab.label}"?`)) {
+            activeTab.items = [];
+            activeTab.lastActivity = Date.now();
+            activeTab.total = 0;
+            saveTabsToStorage();
             updateCartIcon();
             modalBackdrop.remove();
-            showNotification('Cart cleared! / Kikapu kimefutwa!', 'success', 2000);
+            if (getCartCount() > 0 || Object.keys(tabs).length > 1) {
+                setTimeout(() => showCartReview(), 100);
+            }
+            showNotification(`Tab "${activeTab.label}" cleared! / Kichupo "${activeTab.label}" kimefutwa!`, 'success', 2000);
         }
     };
     
@@ -672,7 +1134,7 @@ function showCartReview() {
 }
 
 // ====================================================
-// PAYMENT MODAL - ENHANCED WITH MULTI-PAYMENT OPTIONS
+// PAYMENT MODAL – unchanged (shows active tab label)
 // ====================================================
 
 function showPaymentModal() {
@@ -704,7 +1166,7 @@ function showPaymentModal() {
                     <span>Complete Purchase / Maliza Ununuzi</span>
                 </h2>
                 <div style="margin-top: 16px; font-size: 14px; opacity: 0.9;">
-                    Smart batch system ensures correct stock allocation / Mfumo mahiri unahakikisha ugawaji sahihi wa stock
+                    Tab: ${getActiveTab().label}
                 </div>
             </div>
             
@@ -715,7 +1177,7 @@ function showPaymentModal() {
                         $${total.toFixed(2)}
                     </div>
                     <div style="color: #666; font-size: 14px;">
-                        ${cart.length} item${cart.length !== 1 ? 's' : ''} • Smart batch tracking / Ufuatiliaji mahiri
+                        ${getActiveTab().items.length} item(s) • Smart batch tracking / Ufuatiliaji mahiri
                     </div>
                 </div>
                 
@@ -872,7 +1334,7 @@ function showPaymentModal() {
     
     document.body.appendChild(modalBackdrop);
     
-    // Initialize payment method handlers
+    // Initialize payment method handlers (unchanged)
     initPaymentMethodHandlers(total);
     
     document.getElementById('back-to-cart-btn').onclick = () => {
@@ -914,9 +1376,8 @@ function showPaymentModal() {
 }
 
 // ====================================================
-// PAYMENT METHOD HANDLERS
+// PAYMENT METHOD HANDLERS (unchanged)
 // ====================================================
-
 function initPaymentMethodHandlers(total) {
     const options = document.querySelectorAll('.payment-option');
     const mixedSection = document.getElementById('mixed-payment-section');
@@ -928,29 +1389,24 @@ function initPaymentMethodHandlers(total) {
         opt.addEventListener('click', function() {
             const method = this.dataset.method;
             
-            // Toggle selection
             if (this.classList.contains('selected')) {
-                // Deselect
                 this.classList.remove('selected');
                 this.style.borderColor = '#e9ecef';
                 this.style.background = '#f8f9fa';
                 selectedPaymentMethods = selectedPaymentMethods.filter(m => m !== method);
                 paymentSplit[method] = 0;
             } else {
-                // Select
                 this.classList.add('selected');
                 this.style.borderColor = '#3b82f6';
                 this.style.background = '#eff6ff';
                 selectedPaymentMethods.push(method);
             }
             
-            // Show/hide mixed payment section
             if (selectedPaymentMethods.length > 1) {
                 mixedSection.style.display = 'block';
                 resetSplitInputs();
             } else {
                 mixedSection.style.display = 'none';
-                // If only one method, set full amount
                 if (selectedPaymentMethods.length === 1) {
                     const method = selectedPaymentMethods[0];
                     paymentSplit = { cash: 0, mpesa: 0, card: 0 };
@@ -958,10 +1414,8 @@ function initPaymentMethodHandlers(total) {
                 }
             }
             
-            // Update payment summary
             updatePaymentSummary(total, summary, summaryText);
             
-            // Enable/disable complete button
             if (selectedPaymentMethods.length > 0) {
                 completeBtn.style.opacity = '1';
                 completeBtn.style.pointerEvents = 'auto';
@@ -974,7 +1428,6 @@ function initPaymentMethodHandlers(total) {
         });
     });
     
-    // Split payment handlers
     document.getElementById('cash-amount')?.addEventListener('input', () => validateSplit(total));
     document.getElementById('mpesa-amount')?.addEventListener('input', () => validateSplit(total));
     document.getElementById('card-amount')?.addEventListener('input', () => validateSplit(total));
@@ -1016,7 +1469,6 @@ function applySplit(total, summary, summaryText) {
         return;
     }
     
-    // Store the split
     paymentSplit = { cash, mpesa, card };
     
     updatePaymentSummary(total, summary, summaryText);
@@ -1046,7 +1498,7 @@ function updatePaymentSummary(total, summary, summaryText) {
 }
 
 // ====================================================
-// FRONTEND SALE COMPLETION FUNCTIONS
+// FRONTEND SALE COMPLETION FUNCTIONS (unchanged, but now process active tab)
 // ====================================================
 
 /**
@@ -1072,7 +1524,6 @@ async function processSaleItem(shop_id, seller, cartItem, index) {
         type = "main_item"
     } = cartItem;
     
-    // Validate required fields
     if (!item_id || !category_id || !batch_id || !quantity || quantity <= 0) {
         throw new Error(`Invalid item data: ${JSON.stringify({ item_id, category_id, batch_id, quantity })}`);
     }
@@ -1082,7 +1533,6 @@ async function processSaleItem(shop_id, seller, cartItem, index) {
     
     console.log(`   Type: ${type} | Qty: ${quantityNum} | Conv: ${conversionFactorNum}`);
     
-    // Get item reference
     const itemRef = doc(
         db,
         "Shops",
@@ -1103,7 +1553,6 @@ async function processSaleItem(shop_id, seller, cartItem, index) {
     const batches = itemData.batches || [];
     const totalStock = parseFloat(itemData.stock || 0);
     
-    // Find target batch
     const batchIndex = batches.findIndex(b => b.id === batch_id);
     if (batchIndex === -1) {
         throw new Error(`Batch ${batch_id} not found for item ${itemData.name}`);
@@ -1115,13 +1564,11 @@ async function processSaleItem(shop_id, seller, cartItem, index) {
     
     console.log(`   Batch available: ${batchQty} base units`);
     
-    // Calculate base quantity (critical conversion logic)
     let baseQty;
     let unitPrice;
     let totalPrice;
     
     if (type === "selling_unit") {
-        // Selling units: quantity ÷ conversion_factor
         baseQty = quantityNum / conversionFactorNum;
         unitPrice = sellPrice / conversionFactorNum;
         totalPrice = unitPrice * quantityNum;
@@ -1129,7 +1576,6 @@ async function processSaleItem(shop_id, seller, cartItem, index) {
         console.log(`   Selling unit: ${quantityNum} units ÷ ${conversionFactorNum} = ${baseQty} base units`);
         console.log(`   Unit price: $${sellPrice} ÷ ${conversionFactorNum} = $${unitPrice}`);
     } else {
-        // Main item: no conversion needed
         baseQty = quantityNum;
         unitPrice = sellPrice;
         totalPrice = sellPrice * baseQty;
@@ -1139,7 +1585,6 @@ async function processSaleItem(shop_id, seller, cartItem, index) {
     
     console.log(`   Required to deduct: ${baseQty} base units`);
     
-    // Validate stock availability
     if (batchQty < baseQty) {
         throw new Error(
             `Insufficient stock in batch ${batch_id}. ` +
@@ -1147,11 +1592,9 @@ async function processSaleItem(shop_id, seller, cartItem, index) {
         );
     }
     
-    // Calculate new quantities
     const newBatchQty = batchQty - baseQty;
     const newTotalStock = totalStock - baseQty;
     
-    // Create stock transaction
     const stockTxn = {
         id: generateTransactionId(),
         type: "sale",
@@ -1168,17 +1611,14 @@ async function processSaleItem(shop_id, seller, cartItem, index) {
         conversion_factor: type === "selling_unit" ? conversionFactorNum : null
     };
     
-    // Update batch quantity
     const updatedBatches = [...batches];
     updatedBatches[batchIndex] = {
         ...updatedBatches[batchIndex],
         quantity: newBatchQty
     };
     
-    // Get existing stock transactions
     const stockTransactions = itemData.stockTransactions || [];
     
-    // Update Firestore document
     await updateDoc(itemRef, {
         batches: updatedBatches,
         stock: newTotalStock,
@@ -1209,9 +1649,6 @@ async function processSaleItem(shop_id, seller, cartItem, index) {
     };
 }
 
-/**
- * Rollback item deduction (for error recovery)
- */
 async function rollbackItemDeduction(itemResult) {
     try {
         const { item_ref, original_batch_qty, original_total_stock, batch_id } = itemResult;
@@ -1244,19 +1681,14 @@ async function rollbackItemDeduction(itemResult) {
     }
 }
 
-// ====================================================
-// CREATE SALE RECORD - FIXED FOR STAFF
-// ====================================================
 async function createSaleRecord(shop_id, seller, items, updatedItems, paymentDetails = {}) {
     try {
         const saleId = generateTransactionId();
         const totalAmount = updatedItems.reduce((sum, item) => sum + (item.total_price || 0), 0);
         
-        // ✅ FIX: Get current user safely
         const auth = getAuth();
         const user = auth.currentUser;
         
-        // ✅ FIX: Get session type and staff context
         const sessionType = localStorage.getItem("sessionType") || "owner";
         let staffInfo = {};
         
@@ -1274,7 +1706,6 @@ async function createSaleRecord(shop_id, seller, items, updatedItems, paymentDet
             }
         }
         
-        // ✅ FIX: Build seller info with NO undefined values
         const sellerInfo = {
             uid: user?.uid || null,
             email: user?.email || null,
@@ -1283,7 +1714,6 @@ async function createSaleRecord(shop_id, seller, items, updatedItems, paymentDet
             ...staffInfo
         };
         
-        // ✅ FIX: Clean items - remove any undefined values
         const cleanItems = (items || []).map(item => ({
             item_id: item.item_id || null,
             main_item_id: item.main_item_id || item.item_id || null,
@@ -1298,7 +1728,6 @@ async function createSaleRecord(shop_id, seller, items, updatedItems, paymentDet
             conversion_factor: parseFloat(item.conversion_factor) || 1
         }));
         
-        // ✅ FIX: Clean processed items
         const cleanProcessedItems = (updatedItems || []).map(item => ({
             item_id: item.item_id || null,
             item_type: item.item_type || null,
@@ -1313,11 +1742,9 @@ async function createSaleRecord(shop_id, seller, items, updatedItems, paymentDet
             transaction_id: item.transaction_id || null
         }));
         
-        // ✅ ENHANCED: Add payment method details
         const paymentMethod = paymentDetails.method || 'cash';
         const paymentSplit = paymentDetails.split || null;
         
-        // ✅ FIX: Create sale record with NO undefined values
         const saleRecord = {
             id: saleId,
             shop_id: shop_id || null,
@@ -1330,10 +1757,10 @@ async function createSaleRecord(shop_id, seller, items, updatedItems, paymentDet
             timestamp: new Date().toISOString(),
             created_at: serverTimestamp(),
             status: 'completed',
-            transaction_count: updatedItems?.length || 0
+            transaction_count: updatedItems?.length || 0,
+            tab_label: getActiveTab().label // include tab label for reference
         };
         
-        // ✅ FIX: Final check - remove any undefined values at top level
         const finalSaleRecord = {};
         Object.keys(saleRecord).forEach(key => {
             if (saleRecord[key] !== undefined) {
@@ -1341,9 +1768,7 @@ async function createSaleRecord(shop_id, seller, items, updatedItems, paymentDet
             }
         });
         
-        // Save to Firestore
         const saleRef = doc(db, "Shops", shop_id, "sales", saleId);
-        
         await setDoc(saleRef, finalSaleRecord);
         console.log('📝 Sale record created:', saleId);
         
@@ -1360,16 +1785,15 @@ async function createSaleRecord(shop_id, seller, items, updatedItems, paymentDet
 }
 
 /**
- * Main sale completion function (replaces backend call)
+ * Main sale completion function – processes the active tab and then removes it.
  */
 async function completeSale(paymentDetails = { method: 'cash', split: null, total: 0 }) {
-    console.log('🛒 Starting FRONTEND sale completion');
+    console.log('🛒 Starting FRONTEND sale completion for active tab');
     
     const auth = getAuth();
     const user = auth.currentUser;
     if (!user) throw new Error("Please login first / Tafadhali ingia kwanza");
 
-    // ✅ FIX: Get shop ID properly (works for both owner and staff)
     const sessionType = localStorage.getItem("sessionType") || "owner";
     let shop_id = user.uid;
     
@@ -1385,7 +1809,8 @@ async function completeSale(paymentDetails = { method: 'cash', split: null, tota
         }
     }
     
-    if (cart.length === 0) throw new Error("Cart is empty! / Kikapu hakina bidhaa!");
+    const activeTab = getActiveTab();
+    if (activeTab.items.length === 0) throw new Error("Cart is empty! / Kikapu hakina bidhaa!");
 
     const seller = {
         type: sessionType,
@@ -1394,8 +1819,7 @@ async function completeSale(paymentDetails = { method: 'cash', split: null, tota
         email: user.email || ""
     };
 
-    // Transform cart items to sale format
-    const saleItems = cart.map(item => ({
+    const saleItems = activeTab.items.map(item => ({
         item_id: item.item_id,
         main_item_id: item.main_item_id || item.item_id,
         category_id: item.category_id || 'unknown',
@@ -1421,10 +1845,8 @@ async function completeSale(paymentDetails = { method: 'cash', split: null, tota
     const updatedItems = [];
     const errors = [];
     
-    // Process each item sequentially
     for (let idx = 0; idx < saleItems.length; idx++) {
         const cartItem = saleItems[idx];
-        
         try {
             const result = await processSaleItem(shop_id, seller, cartItem, idx);
             updatedItems.push(result);
@@ -1439,10 +1861,8 @@ async function completeSale(paymentDetails = { method: 'cash', split: null, tota
         }
     }
     
-    // If any items failed, rollback successful ones
     if (errors.length > 0) {
         console.log('Rolling back successful items due to errors', errors);
-        
         for (const item of updatedItems) {
             if (item.rolled_back !== true) {
                 try {
@@ -1452,26 +1872,33 @@ async function completeSale(paymentDetails = { method: 'cash', split: null, tota
                 }
             }
         }
-        
         throw new Error(`Sale partially failed: ${errors.length} item(s) could not be processed. ${errors[0].error}`);
     }
     
-    // Create sale record with payment details
     const saleRecord = await createSaleRecord(shop_id, seller, saleItems, updatedItems, paymentDetails);
     
-    // Clear cart and reset cart ID
-    cart = [];
-    localStorage.removeItem('current_cart_id');
-    saveCartToStorage();
+    // Remove the active tab after successful sale
+    delete tabs[activeTabId];
+    
+    // If there are other tabs, switch to one; otherwise create a new default tab
+    const remainingIds = Object.keys(tabs);
+    if (remainingIds.length > 0) {
+        activeTabId = remainingIds[0];
+    } else {
+        activeTabId = createTab('Current Sale');
+    }
+    
+    saveTabsToStorage();
     updateCartIcon();
     
     console.log('🎉 FRONTEND SALE COMPLETED SUCCESSFULLY', {
         items_processed: updatedItems.length,
         sale_id: saleRecord.id,
-        payment_method: paymentDetails.method
+        payment_method: paymentDetails.method,
+        tab_closed: activeTab.label
     });
     
-    showNotification('✅ Frontend sale completed successfully! / Ununuzi umekamilika kikamilifu!', 'success', 5000);
+    showNotification('✅ Sale completed! / Ununuzi umekamilika!', 'success', 5000);
     
     return {
         success: true,
@@ -1482,21 +1909,28 @@ async function completeSale(paymentDetails = { method: 'cash', split: null, tota
 }
 
 // ====================================================
-// CART ITEM REMOVAL
+// CART ITEM REMOVAL (from a specific tab)
 // ====================================================
 
-function removeCartItem(index) {
-    if (index >= 0 && index < cart.length) {
-        const itemName = cart[index].name;
-        cart.splice(index, 1);
-        saveCartToStorage();
+function removeCartItem(tabId, index) {
+    const tab = tabs[tabId];
+    if (!tab) return;
+    
+    if (index >= 0 && index < tab.items.length) {
+        const itemName = tab.items[index].name;
+        tab.items.splice(index, 1);
+        tab.lastActivity = Date.now();
+        tab.total = tab.items.reduce((sum, i) => sum + ((i.price || i.sellPrice || i.sell_price || 0) * i.quantity), 0);
+        saveTabsToStorage();
         updateCartIcon();
-        showNotification(`Removed ${itemName} from cart / Imeondolewa ${itemName} kwenye kikapu`, 'info', 2000);
+        showNotification(`Removed ${itemName} from ${tab.label} / Imeondolewa ${itemName} kwenye ${tab.label}`, 'info', 2000);
         
         const existingModal = document.querySelector('.cart-modal-backdrop');
         if (existingModal) {
             existingModal.remove();
-            if (cart.length > 0) setTimeout(() => showCartReview(), 300);
+            if (tab.items.length > 0 || Object.keys(tabs).length > 1) {
+                setTimeout(() => showCartReview(), 100);
+            }
         }
     }
 }
@@ -1506,12 +1940,11 @@ function removeCartItem(index) {
 // ====================================================
 
 document.addEventListener("DOMContentLoaded", () => {
-    console.log('🛒 Smart Cart System Initializing...');
+    console.log('🛒 Smart Cart System (Multi‑Tab) Initializing...');
     
-    loadCartFromStorage();
+    loadTabsFromStorage();
     updateCartIcon();
     
-    // Test cart icon
     setTimeout(() => {
         if (!document.getElementById('sales-cart-icon')) {
             console.error('Cart icon not found - retrying...');
@@ -1522,12 +1955,20 @@ document.addEventListener("DOMContentLoaded", () => {
     // Expose globally
     window.cartIcon = {
         addItem: addItemToCart,
-        getCart: () => [...cart],
-        clearCart: () => {
-            cart = [];
-            saveCartToStorage();
+        getActiveTab: () => getActiveTab(),
+        getTabsList: getTabsList,
+        createTab: createTab,
+        switchTab: switchTab,
+        closeTab: closeTab,
+        editTabLabel: editTabLabel,
+        clearActiveTab: () => {
+            const tab = getActiveTab();
+            tab.items = [];
+            tab.lastActivity = Date.now();
+            tab.total = 0;
+            saveTabsToStorage();
             updateCartIcon();
-            showNotification('Cart cleared / Kikapu kimefutwa', 'info', 2000);
+            showNotification(`Tab "${tab.label}" cleared / Kichupo "${tab.label}" kimefutwa`, 'info', 2000);
         },
         removeItem: removeCartItem,
         showCart: showCartReview,
@@ -1536,32 +1977,30 @@ document.addEventListener("DOMContentLoaded", () => {
         getTotal: getCartTotal,
         completeSale: completeSale,
         debug: () => {
-            console.log('🛒 SMART CART DEBUG:', cart.map(item => ({
-                name: item.name,
-                type: item.type,
-                id: item.id,
-                batch_id: item.batch_id,
-                can_fulfill: item.can_fulfill,
-                quantity: item.quantity
-            })));
+            console.log('🛒 MULTI‑TAB DEBUG:', tabs);
         }
     };
     
-    console.log('🛒 Smart Cart System Ready!');
+    console.log('🛒 Smart Cart System (Multi‑Tab) Ready!');
     console.log(`
 ╔═══════════════════════════════════════════╗
-║     🧠 SMART CART SYSTEM READY           ║
+║   🧠 MULTI‑TAB CART SYSTEM READY         ║
 ╠═══════════════════════════════════════════╣
-║ • Smart batch tracking                   ║
-║ • Real stock management                  ║
-║ • Frontend sale processing               ║
-║ • Error recovery & rollback              ║
-║ • Multi-payment methods                  ║
-║   (Cash, M-Pesa, Card, Split)            ║
-║ • No backend required!                   ║
+║ • Multiple tabs (pubs, clubs, tables)    ║
+║ • Auto‑named (Customer 1, 2, …)          ║
+║ • Edit labels with pencil ✎               ║
+║ • Prevents empty‑tab clutter              ║
+║ • Overflow: first 3 tabs + more modal    ║
+║ • Rename any tab, even hidden            ║
+║ • Smart batch tracking                    ║
+║ • Frontend sale processing                ║
+║ • Error recovery & rollback               ║
+║ • Multi‑payment methods                   ║
+║   (Cash, M-Pesa, Card, Split)             ║
+║ • No backend required!                    ║
 ╚═══════════════════════════════════════════╝
 `);
 });
 
-// Export main function
-export { addItemToCart, completeSale };
+// Export main functions
+export { addItemToCart, completeSale, createTab, switchTab, getTabsList };

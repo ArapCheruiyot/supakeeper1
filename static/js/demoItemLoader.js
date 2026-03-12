@@ -14,9 +14,9 @@ console.log("📦 Demo Item Loader initialized");
     // Check if this is a fresh login
     const isFreshDemo = localStorage.getItem("freshDemoLogin") === "true";
     
-    // Configuration - INCREASED to 25 seconds for first-time demo
-    const MAX_WAIT_TIME = 25000; // 25 seconds max wait (was 10000)
-    const CHECK_INTERVAL = 800; // Check every 800ms (was 500)
+    // Configuration
+    const MAX_WAIT_TIME = 10000; // 10 seconds max wait
+    const CHECK_INTERVAL = 500; // Check every 500ms
     const START_TIME = Date.now();
     
     let checkCount = 0;
@@ -39,7 +39,7 @@ console.log("📦 Demo Item Loader initialized");
                     <h3 style="color: #166534; margin-bottom: 10px; font-size: 22px;">Setting up your demo shop</h3>
                     
                     <p style="color: #4b5563; margin-bottom: 15px; font-size: 16px;" id="loader-message">
-                        Creating your private demo shop...
+                        Loading your sample products...
                     </p>
                     
                     <div style="background: #f0fdf4; padding: 15px; border-radius: 12px; margin: 15px 0; text-align: left;">
@@ -59,9 +59,6 @@ console.log("📦 Demo Item Loader initialized");
                             Refresh Manually
                         </button>
                     </div>
-                    
-                    <!-- Continue Anyway button will be added here dynamically -->
-                    <div id="continue-button-container" style="margin-top: 15px;"></div>
                 </div>
             </div>
             <style>
@@ -100,43 +97,7 @@ console.log("📦 Demo Item Loader initialized");
         if (elapsed >= 8 && !refreshAttempted) {
             const refreshOption = document.getElementById('refresh-option');
             if (refreshOption) refreshOption.style.display = 'block';
-            refreshAttempted = true;
         }
-    }
-    
-    // Add "Continue Anyway" button after 20 seconds
-    function addContinueAnywayButton() {
-        if (document.getElementById('continue-anyway-btn')) return;
-        
-        const container = document.getElementById('continue-button-container');
-        if (!container) return;
-        
-        const continueBtn = document.createElement('button');
-        continueBtn.id = 'continue-anyway-btn';
-        continueBtn.innerHTML = 'Continue to Shop Anyway / Endelea Hata Hivyo';
-        continueBtn.style.cssText = `
-            background: #22c55e;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: bold;
-            margin-top: 20px;
-            cursor: pointer;
-            width: 100%;
-            font-size: 16px;
-        `;
-        continueBtn.onclick = function() {
-            console.log("👉 User chose to continue anyway");
-            const overlay = document.getElementById('demo-smart-loader');
-            if (overlay) {
-                overlay.style.transition = 'opacity 0.5s';
-                overlay.style.opacity = '0';
-                setTimeout(() => overlay.remove(), 500);
-            }
-        };
-        
-        container.appendChild(continueBtn);
     }
     
     // Check if items are loaded
@@ -229,40 +190,14 @@ console.log("📦 Demo Item Loader initialized");
             checkCount++;
             updateTimer();
             
-            // Update messages based on time - MORE REASSURING
+            // Update messages based on time
             const elapsed = Date.now() - START_TIME;
-            const seconds = Math.floor(elapsed / 1000);
             
-            if (seconds < 5) {
-                updateMessage(
-                    "Creating your demo shop...", 
-                    "✓ Copying 50+ sample products"
-                );
-            } else if (seconds < 10) {
-                updateMessage(
-                    "Loading your products...", 
-                    "✓ Setting up categories and prices"
-                );
-            } else if (seconds < 15) {
-                updateMessage(
-                    "Organizing everything...", 
-                    "✓ Preparing your inventory"
-                );
-            } else if (seconds < 20) {
-                updateMessage(
-                    "Almost there!", 
-                    "✓ Final touches on your shop"
-                );
-            } else {
-                updateMessage(
-                    "Still working on it...", 
-                    "⚠️ Demo shops take 20-30 seconds first time. Thanks for your patience!"
-                );
-                
-                // Add "Continue Anyway" button after 20 seconds
-                if (seconds >= 20) {
-                    addContinueAnywayButton();
-                }
+            if (elapsed > 3000) {
+                updateMessage("Still setting up...", "✓ Organizing products into categories");
+            }
+            if (elapsed > 6000) {
+                updateMessage("Almost there!", "✓ Finalizing your demo shop");
             }
             
             if (areItemsLoaded()) {

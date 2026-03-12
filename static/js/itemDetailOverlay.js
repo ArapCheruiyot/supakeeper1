@@ -237,49 +237,21 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function ensureSellUnitPrices(ctx, baseSellPrice, actor) {
-    try {
-      const units = await fetchSellUnits(ctx.shopId, ctx.categoryId, ctx.itemId);
-      if (!units || units.length === 0) return;
+  try {
+    const units = await fetchSellUnits(ctx.shopId, ctx.categoryId, ctx.itemId);
+    if (!units || units.length === 0) return;
 
-      const timestamp = Date.now();
-      for (const u of units) {
-        const conv = Number(u.conversionFactor ?? u.conversion ?? 1) || 1;
-        const suggested = Math.round(((Number(baseSellPrice || 0) / conv) + Number.EPSILON) * 100) / 100;
+    const timestamp = Date.now();
+    for (const u of units) {
+      const conv = Number(u.conversionFactor ?? u.conversion ?? 1) || 1;
+      const suggested = Math.round(((Number(baseSellPrice || 0) / conv) + Number.EPSILON) * 100) / 100;
 
-        if (u.sellPrice == null) {
-          let val = prompt(
-            `Set selling price for "${u.name}" (no price yet) / Weka bei ya kuuza kwa "${u.name}" (hakuna bei bado)\n` +
-            `Suggestion / Mapendekezo: KSh ${suggested} (main price ÷ ${conv})\n\n` +
-            `Enter price per ${u.name}: / Weka bei kwa ${u.name}:`,
-            String(suggested)
-          );
-          if (val === null) continue;
-          const price = parseFloat(val);
-          if (!isFinite(price) || price <= 0) {
-            alert(`Skipping "${u.name}" — invalid price. / "${u.name}" imerukwa — bei si sahihi.`);
-            continue;
-          }
-          const uRef = doc(db, "Shops", ctx.shopId, "categories", ctx.categoryId, "items", ctx.itemId, u.__col || "sellUnits", u.id);
-          await updateDoc(uRef, {
-            sellPrice: price,
-            lastSellPriceUpdate: timestamp,
-            updatedAt: timestamp,
-            updatedBy: actor
-          });
-          continue;
-        }
-
-        const wantsChange = confirm(
-          `"${u.name}" current price / bei ya sasa: KSh ${u.sellPrice}\n` +
-          `Suggested / Mapendekezo (main price ÷ ${conv}): KSh ${suggested}\n\n` +
-          `Do you want to change it now? / Unataka kuibadilisha sasa?`
-        );
-        if (!wantsChange) continue;
-
+      if (u.sellPrice == null) {
         let val = prompt(
-          `Enter new price for "${u.name}": / Weka bei mpya ya "${u.name}":\n` +
-          `Suggestion / Mapendekezo: KSh ${suggested}`,
-          String(u.sellPrice)
+          `Set selling price for "${u.name}" (no price yet) / Weka bei ya kuuza kwa "${u.name}" (hakuna bei bado)\n` +
+          `Suggestion / Mapendekezo: KSh ${suggested} (main price ÷ ${conv})\n\n` +
+          `Enter price per ${u.name}: / Weka bei kwa ${u.name}:`,
+          String(suggested)
         );
         if (val === null) continue;
         const price = parseFloat(val);
@@ -294,11 +266,45 @@ document.addEventListener("DOMContentLoaded", () => {
           updatedAt: timestamp,
           updatedBy: actor
         });
+        continue;
       }
-    } catch (e) {
-      console.warn("ensureSellUnitPrices failed:", e);
+
+      // === NEW CHECK: Skip if price is already correct (difference less than 1 cent) ===
+      if (Math.abs((u.sellPrice || 0) - suggested) < 0.01) {
+        console.log(`✅ ${u.name} price already correct at KSh ${u.sellPrice} - skipping update`);
+        continue; // Skip update - price is already correct
+      }
+
+      const wantsChange = confirm(
+        `"${u.name}" current price / bei ya sasa: KSh ${u.sellPrice}\n` +
+        `Suggested / Mapendekezo (main price ÷ ${conv}): KSh ${suggested}\n\n` +
+        `Do you want to change it now? / Unataka kuibadilisha sasa?`
+      );
+      if (!wantsChange) continue;
+
+      let val = prompt(
+        `Enter new price for "${u.name}": / Weka bei mpya ya "${u.name}":\n` +
+        `Suggestion / Mapendekezo: KSh ${suggested}`,
+        String(u.sellPrice)
+      );
+      if (val === null) continue;
+      const price = parseFloat(val);
+      if (!isFinite(price) || price <= 0) {
+        alert(`Skipping "${u.name}" — invalid price. / "${u.name}" imerukwa — bei si sahihi.`);
+        continue;
+      }
+      const uRef = doc(db, "Shops", ctx.shopId, "categories", ctx.categoryId, "items", ctx.itemId, u.__col || "sellUnits", u.id);
+      await updateDoc(uRef, {
+        sellPrice: price,
+        lastSellPriceUpdate: timestamp,
+        updatedAt: timestamp,
+        updatedBy: actor
+      });
     }
+  } catch (e) {
+    console.warn("ensureSellUnitPrices failed:", e);
   }
+}
 
   // =========================================================
   // STYLES - RESTORED ORIGINAL VISUAL CHARM

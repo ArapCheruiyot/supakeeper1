@@ -1,38 +1,29 @@
 // tourLogin.js - One-click demo login for Superkeeper
+// BULLETPROOF: Waits for auth persistence, verifies session, multiple fallbacks
 console.log("🎟️ Tour Login module loaded");
 
-// Demo account credentials - USING YOUR ACTUAL DEMO ACCOUNT
 const DEMO_ACCOUNT = {
     email: "superkeeper35@gmail.com",
     password: "SUPAKIPA@123"
 };
 
-// Demo shop settings - USE THE SAME SHOP FOR ALL DEMO USERS
-const DEMO_SHOP = {
-    name: "Superkeeper Demo Shop",
-    id: "demo-shop-supakeeper",  // ← FIXED ID for all demo users
-    plan: "BASIC",
-    isDemo: true
-};
+// FIXED SHOP ID - The actual shop ID in your Firestore
+const DEMO_SHOP_ID = "yZPZIBNq9Qgrb8MI1f7aSvMSuwP2";
+const DEMO_SHOP_NAME = "Superkeeper Demo Shop";
 
 export async function handleDemoLogin() {
     console.log("🔐 Starting demo login...");
     
     try {
         const { getAuth, signInWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js");
-        const { doc, getDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js");
-        const { db } = await import("./firebase-config.js");
         
         const auth = getAuth();
         
         console.log("📧 Attempting login with:", DEMO_ACCOUNT.email);
         
-        // Clear any existing session first
-        await import("https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js").then(({ signOut }) => {
-            return signOut(auth).catch(() => {});
-        });
+        // Clear any existing session flags FIRST
+        localStorage.clear(); // Start fresh - no stale data
         
-        // Try to sign in
         const userCredential = await signInWithEmailAndPassword(
             auth, 
             DEMO_ACCOUNT.email, 
@@ -42,92 +33,85 @@ export async function handleDemoLogin() {
         const user = userCredential.user;
         console.log("✅ Demo login successful:", user.email);
         
-        // ========== IMPORTANT CHANGE: Use FIXED shop ID ==========
-        const shopId = DEMO_SHOP.id;  // ← USE THE SAME SHOP FOR EVERYONE!
+        // Set session flags
+        localStorage.setItem("isDemoMode", "true");
+        localStorage.setItem("activeShopId", DEMO_SHOP_ID);
+        localStorage.setItem("activeShopName", DEMO_SHOP_NAME);
+        localStorage.setItem("freshDemoLogin", "true");
+        localStorage.setItem("demoLoginTime", Date.now().toString());
+        localStorage.setItem("sessionType", "owner"); // Explicitly set session type
         
-        // Check if shop exists (it should, since it's the main demo shop)
-        const shopDocRef = doc(db, "Shops", shopId);
-        const shopDoc = await getDoc(shopDocRef);
+        console.log("🎉 Demo setup complete. Verifying auth before redirect...");
         
-        if (!shopDoc.exists()) {
-            console.log("⚠️ Main demo shop not found! Creating...");
-            // Create main demo shop only if it doesn't exist
-            await setDoc(shopDocRef, {
-                shopName: DEMO_SHOP.name,
-                ownerId: user.uid,
-                plan: DEMO_SHOP.plan,
-                isDemo: true,
-                createdAt: new Date(),
-                isMainDemo: true
+        // ===== CRITICAL: Wait for auth to be fully ready =====
+        // This function checks every 100ms until auth is confirmed
+        const waitForAuth = () => {
+            return new Promise((resolve) => {
+                let attempts = 0;
+                const maxAttempts = 30; // 3 seconds total
+                
+                const checkAuth = setInterval(() => {
+                    attempts++;
+                    
+                    // Check if user is still authenticated
+                    const currentUser = auth.currentUser;
+                    
+                    if (currentUser) {
+                        console.log(`✅ Auth verified after ${attempts * 100}ms`);
+                        clearInterval(checkAuth);
+                        resolve(true);
+                    } else if (attempts >= maxAttempts) {
+                        console.log("⚠️ Auth not verified after max attempts, but proceeding anyway");
+                        clearInterval(checkAuth);
+                        resolve(false);
+                    } else {
+                        console.log(`⏳ Waiting for auth to persist... attempt ${attempts}/${maxAttempts}`);
+                    }
+                }, 100);
             });
-        } else {
-            console.log("✅ Using existing main demo shop");
+        };
+        
+        // Wait for auth to be confirmed
+        const authVerified = await waitForAuth();
+        
+        // Double-check localStorage is set
+        const verifyStorage = () => {
+            const checks = {
+                activeShopId: localStorage.getItem("activeShopId") === DEMO_SHOP_ID,
+                isDemoMode: localStorage.getItem("isDemoMode") === "true",
+                freshDemoLogin: localStorage.getItem("freshDemoLogin") === "true"
+            };
+            
+            console.log("📦 Storage verification:", checks);
+            return Object.values(checks).every(v => v === true);
+        };
+        
+        const storageVerified = verifyStorage();
+        
+        if (!storageVerified) {
+            console.log("⚠️ Storage verification failed, resetting flags");
+            localStorage.setItem("activeShopId", DEMO_SHOP_ID);
+            localStorage.setItem("isDemoMode", "true");
+            localStorage.setItem("freshDemoLogin", "true");
         }
         
-        // ========== END OF CHANGE ==========
+        console.log("🚀 Redirecting to dashboard...");
         
-        // Set demo session
-        localStorage.setItem("isDemoMode", "true");
-        localStorage.setItem("activeShopId", shopId);
-        localStorage.setItem("activeShopName", DEMO_SHOP.name);
+        // Final redirect with a slightly longer delay if auth wasn't verified
+        const redirectDelay = authVerified ? 200 : 500;
         
-        // ========== UPDATED: Clear any old flags first ==========
-        console.log("🎉 Demo setup complete! Setting flags for dashboard...");
-        
-        // Clear any existing flags to avoid conflicts
-        localStorage.removeItem("freshDemoLogin");
-        
-        // Set flag for dashboard to show loading state
-        localStorage.setItem("freshDemoLogin", "true");
-        
-        // Also set a timestamp to track when login happened
-        localStorage.setItem("demoLoginTime", Date.now().toString());
-        
-        console.log("⏱️ Demo login timestamp set");
-        
-        // Show loading message to user
-        alert("🎮 Setting up your demo experience... This will take 10-15 seconds first time only!");
-        
-        // Small delay to let Firebase finish writing
         setTimeout(() => {
-            console.log("➡️ Redirecting to dashboard...");
             window.location.href = "/dashboard";
-        }, 2000); // 2 second delay
-        
-        // ========== END OF UPDATED SECTION ==========
+        }, redirectDelay);
         
     } catch (error) {
         console.error("❌ Demo login failed:", error);
         
-        // Special handling - if we get invalid-login-credentials but we KNOW they work
-        if (error.code === 'auth/invalid-login-credentials') {
-            console.log("⚠️ Got invalid credentials error, but diagnostic shows they work!");
-            console.log("🔄 Attempting one more time with fresh auth...");
-            
-            // Try one more time after a short delay
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
-        }
-        
         let errorMessage = "Demo login failed. ";
-        
-        switch (error.code) {
-            case 'auth/operation-not-allowed':
-                errorMessage = "Email/Password login is not enabled. Please contact support.";
-                console.error("🔧 FIX: Enable Email/Password in Firebase Console → Authentication → Sign-in method");
-                break;
-            case 'auth/user-not-found':
-                errorMessage += "Demo account not set up. Please contact support.";
-                break;
-            case 'auth/wrong-password':
-                errorMessage += "Demo account password incorrect.";
-                break;
-            case 'auth/too-many-requests':
-                errorMessage += "Too many attempts. Please try again later.";
-                break;
-            default:
-                errorMessage += "Please try again.";
+        if (error.code === 'auth/invalid-login-credentials') {
+            errorMessage += "Invalid credentials. Please contact support.";
+        } else {
+            errorMessage += error.message;
         }
         
         alert(errorMessage);
