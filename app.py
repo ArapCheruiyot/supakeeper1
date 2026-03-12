@@ -27,6 +27,10 @@ import os
 # ======================================================
 
 
+
+
+app = Flask(__name__)
+
 import tracemalloc
 tracemalloc.start()
 
@@ -40,8 +44,6 @@ def debug_memory():
     })
 
 
-
-app = Flask(__name__)
 
 # ======================================================
 # FIREBASE CONFIG
