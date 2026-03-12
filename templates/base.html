@@ -101,8 +101,15 @@
     {% block scripts %}{% endblock %}
     
     <!-- GPT-trainer Chatbot Integration -->
-    <!-- Main GPT-trainer embed script -->
-    <script src="https://cdn.gpt-trainer.com/embed.js" data-uuid="a6fd6988880e4effad1085bc43825cb9"></script>
+    <!-- GPT-trainer configuration -->
+    <script>
+        window.GPTTConfig = {
+            uuid: "a6fd6988880e4effad1085bc43825cb9"
+        }
+    </script>
+    
+    <!-- GPT-trainer main widget script -->
+    <script src="https://app.gpt-trainer.com/widget-asset.min.js" defer></script>
     
     <!-- Custom chatbot messenger script -->
     <script src="{{ url_for('static', filename='js/chatbot.js') }}"></script>
