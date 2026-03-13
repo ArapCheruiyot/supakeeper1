@@ -562,6 +562,8 @@ def sales():
     """
     OPTIMIZED SEARCH using in-memory index - 100x faster!
     """
+    global search_index  # ← ADD THIS LINE - tells Python to use the global variable
+    
     try:
         start_time = time.time()
         data = request.get_json() or {}
@@ -577,8 +579,7 @@ def sales():
                 "meta": {"processing_time_ms": round((time.time() - start_time) * 1000, 2)}
             }), 400
 
-        # CRITICAL FIX: Check if search_index exists
-        global search_index
+        # Check if search_index exists
         if search_index is None:
             print("⚠️ Search index not initialized, rebuilding cache...")
             refresh_full_item_cache()
@@ -611,7 +612,6 @@ def sales():
                 "processing_time_ms": round((time.time() - start_time) * 1000, 2)
             }
         }), 500
-
 # ======================================================
 # COMPLETE SALE ROUTE
 # ======================================================
@@ -1047,6 +1047,7 @@ def admin_refresh_cache():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
 
 
 
