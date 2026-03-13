@@ -11,14 +11,13 @@ console.log("🧠 Sales Empty State module loading (add-on mode)...");
     // Styles (minimal, only for product list)
     const styles = `
         <style id="sales-addon-styles">
-            #product-list-addon {
+            .product-list-container {
                 padding: 16px;
                 background: white;
                 border-radius: 12px;
-                margin: 16px 24px;
+                margin-top: 16px;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.05);
                 display: none;
-                border: 1px solid #e2e8f0;
             }
             .product-list-header {
                 display: flex;
@@ -196,26 +195,17 @@ console.log("🧠 Sales Empty State module loading (add-on mode)...");
     // Function to add the product list container and button
     function setupAddon() {
         if (addonInitialized) return;
-        
-        const overlay = document.getElementById('sales-overlay');
-        if (!overlay) return;
+        const salesResults = document.getElementById('sales-results');
+        if (!salesResults) return;
 
-        // Check if container already exists
         if (document.getElementById('product-list-addon')) return;
 
-        // Create container for product list (outside sales-results)
         const productContainer = document.createElement('div');
         productContainer.id = 'product-list-addon';
         productContainer.className = 'product-list-container';
-        
-        // Insert it AFTER the header but BEFORE sales-results
-        const header = overlay.querySelector('div:first-child');
-        if (header) {
-            header.insertAdjacentElement('afterend', productContainer);
-        } else {
-            overlay.appendChild(productContainer);
-        }
+        salesResults.appendChild(productContainer);
 
+        // Get header - ONLY ONCE
         const header = document.querySelector('#sales-overlay > div:first-child');
         if (!header) return;
 
@@ -237,7 +227,7 @@ console.log("🧠 Sales Empty State module loading (add-on mode)...");
         btn.className = 'view-products-btn';
         btn.innerHTML = '<span>📋</span> View Products';
 
-        // Insert button at the end of insertLocation
+        // Insert button at the end of insertLocation (but we want it on its own line, so we'll wrap in a div)
         const buttonWrapper = document.createElement('div');
         buttonWrapper.style.display = 'flex';
         buttonWrapper.style.justifyContent = 'flex-end';
@@ -248,10 +238,10 @@ console.log("🧠 Sales Empty State module loading (add-on mode)...");
         btn.addEventListener('click', async () => {
             if (isLoading) return;
 
-            const productContainer = document.getElementById('product-list-addon');
-            if (!productContainer) return;
-
             if (productContainer.style.display === 'none' || productContainer.style.display === '') {
+                const defaultMsg = salesResults.querySelector('div[style*="min-height: 300px;"]');
+                if (defaultMsg) defaultMsg.style.display = 'none';
+
                 if (cachedProducts) {
                     await renderProductList(productContainer);
                     productContainer.style.display = 'block';
@@ -283,9 +273,8 @@ console.log("🧠 Sales Empty State module loading (add-on mode)...");
         if (searchInput) {
             searchInput.addEventListener('input', () => {
                 if (listVisible) {
-                    const productContainer = document.getElementById('product-list-addon');
+                    productContainer.style.display = 'none';
                     const btn = document.getElementById('view-products-btn');
-                    if (productContainer) productContainer.style.display = 'none';
                     if (btn) btn.innerHTML = '<span>📋</span> View Products';
                     listVisible = false;
                 }
