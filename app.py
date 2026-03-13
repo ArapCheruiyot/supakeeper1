@@ -819,6 +819,7 @@ def item_optimization():
 # ======================================================
 @app.route("/debug-cache", methods=["GET"])
 def debug_cache():
+    global search_index  # ← THIS IS THE ONLY ADDITION
     """Debug endpoint to check cache contents (updated with batch tracking)"""
     if not embedding_cache_full["shops"]:
         return jsonify({"error": "Cache empty"}), 404
@@ -860,10 +861,10 @@ def debug_cache():
                 "last_updated": embedding_cache_full["last_updated"]
             },
             "search_index": {
-                "built_at": search_index.last_built,
-                "total_items_indexed": search_index.total_items,
-                "total_selling_units_indexed": search_index.total_selling_units,
-                "unique_keywords": len(search_index.word_index)
+                "built_at": search_index.last_built if search_index else None,
+                "total_items_indexed": search_index.total_items if search_index else 0,
+                "total_selling_units_indexed": search_index.total_selling_units if search_index else 0,
+                "unique_keywords": len(search_index.word_index) if search_index else 0
             }
         })
     except (IndexError, KeyError) as e:
@@ -1047,6 +1048,7 @@ def admin_refresh_cache():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
 
 
 
