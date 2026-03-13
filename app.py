@@ -566,23 +566,24 @@ def sales():
         start_time = time.time()
         data = request.get_json() or {}
         
-        # Log minimal info for debugging
         query = (data.get("query") or "").lower().strip()
         shop_id = data.get("shop_id")
         
         print(f"\n⚡ SEARCH: '{query}' for shop {shop_id}")
 
-        # Validate input
         if not query or len(query) < 2 or not shop_id:
             return jsonify({
                 "items": [],
-                "meta": {
-                    "error": "Invalid query or shop_id",
-                    "processing_time_ms": round((time.time() - start_time) * 1000, 2)
-                }
+                "meta": {"processing_time_ms": round((time.time() - start_time) * 1000, 2)}
             }), 400
 
-        # Use search index for lightning-fast results
+        # CRITICAL FIX: Check if search_index exists
+        global search_index
+        if search_index is None:
+            print("⚠️ Search index not initialized, rebuilding cache...")
+            refresh_full_item_cache()
+            
+        # Use search index
         results = search_index.search(query, shop_id)
         
         processing_time = (time.time() - start_time) * 1000
@@ -594,14 +595,13 @@ def sales():
                 "query": query,
                 "results": len(results),
                 "processing_time_ms": round(processing_time, 2),
-                "using_index": True,
-                "cache_last_updated": embedding_cache_full.get("last_updated")
+                "using_index": True
             }
         }), 200
 
     except Exception as e:
-        import traceback
         print(f"❌ SEARCH ERROR: {e}")
+        import traceback
         traceback.print_exc()
         
         return jsonify({
@@ -1047,6 +1047,7 @@ def admin_refresh_cache():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
 
 
 
