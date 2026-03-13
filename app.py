@@ -84,19 +84,160 @@ REFRESH_DELAY = 2
 
 def refresh_full_item_cache():
     """REVISED: Includes ALL items with BATCH tracking and selling units with batch links"""
+    global search_index  # CRITICAL: Tell Python this is a global variable
+    
     log_memory("before refresh")
     start = time.time()
     print("\n[INFO] Refreshing FULL shop cache (with batch tracking)...")
 
     shops_result = []
-    # ... (keep your full implementation here) ...
 
+    # Your existing fetching code - KEEP IT EXACTLY AS IS
+    for shop_doc in db.collection("Shops").stream():
+        shop_id = shop_doc.id
+        shop_data = shop_doc.to_dict()
+
+        shop_entry = {
+            "shop_id": shop_id,
+            "shop_name": shop_data.get("name", ""),
+            "categories": []
+        }
+
+        for cat_doc in shop_doc.reference.collection("categories").stream():
+            cat_data = cat_doc.to_dict()
+            cat_id = cat_doc.id
+
+            category_entry = {
+                "category_id": cat_id,
+                "category_name": cat_data.get("name", ""),
+                "items": []
+            }
+
+            for item_doc in cat_doc.reference.collection("items").stream():
+                item_data = item_doc.to_dict()
+                item_id = item_doc.id
+                item_name = item_data.get("name", "Unnamed")
+
+                # EMBEDDINGS FETCHING - DISABLED
+                embeddings = []
+
+                # Get batches for this item
+                batches = item_data.get("batches", [])
+                processed_batches = []
+                for batch in batches:
+                    processed_batches.append({
+                        "batch_id": batch.get("id", f"batch_{int(time.time()*1000)}"),
+                        "batch_name": batch.get("batchName", batch.get("batch_name", "Batch")),
+                        "quantity": float(batch.get("quantity", 0)),
+                        "remaining_quantity": float(batch.get("quantity", 0)),
+                        "unit": batch.get("unit", "unit"),
+                        "buy_price": float(batch.get("buyPrice", 0) or batch.get("buy_price", 0)),
+                        "sell_price": float(batch.get("sellPrice", 0) or batch.get("sell_price", 0)),
+                        "timestamp": batch.get("timestamp", 0),
+                        "date": batch.get("date", ""),
+                        "added_by": batch.get("addedBy", ""),
+                        "selling_unit_allocations": batch.get("sellingUnitAllocations", {})
+                    })
+
+                # Get selling units for this item
+                selling_units = []
+                try:
+                    sell_units_ref = db.collection("Shops").document(shop_id) \
+                        .collection("categories").document(cat_id) \
+                        .collection("items").document(item_id) \
+                        .collection("sellUnits")
+                    
+                    sell_units_docs = list(sell_units_ref.stream())
+                    
+                    for sell_unit_doc in sell_units_docs:
+                        sell_unit_data = sell_unit_doc.to_dict()
+                        sell_unit_id = sell_unit_doc.id
+                        
+                        # Get batch links
+                        batch_links = sell_unit_data.get("batchLinks", [])
+                        total_units_available = 0
+                        
+                        for link in batch_links:
+                            total_units_available += link.get("maxUnitsAvailable", 0) - link.get("allocatedUnits", 0)
+                        
+                        selling_units.append({
+                            "sell_unit_id": sell_unit_doc.id,
+                            "name": sell_unit_data.get("name", ""),
+                            "conversion_factor": float(sell_unit_data.get("conversionFactor", 1.0)),
+                            "sell_price": float(sell_unit_data.get("sellPrice", 0.0)),
+                            "images": sell_unit_data.get("images", []),
+                            "is_base_unit": sell_unit_data.get("isBaseUnit", False),
+                            "thumbnail": sell_unit_data.get("images", [None])[0] if sell_unit_data.get("images") else None,
+                            "created_at": sell_unit_data.get("createdAt"),
+                            "updated_at": sell_unit_data.get("updatedAt"),
+                            "batch_links": batch_links,
+                            "total_units_available": total_units_available,
+                            "has_batch_links": len(batch_links) > 0
+                        })
+                    
+                except Exception as e:
+                    print(f"❌ ERROR fetching selling units: {e}")
+
+                # Calculate total stock from batches
+                total_stock_from_batches = sum(batch.get("quantity", 0) for batch in batches)
+                main_stock = float(item_data.get("stock", 0) or 0)
+                effective_stock = total_stock_from_batches if total_stock_from_batches > 0 else main_stock
+                
+                category_entry["items"].append({
+                    "item_id": item_doc.id,
+                    "name": item_data.get("name", ""),
+                    "thumbnail": item_data.get("images", [None])[0],
+                    "sell_price": float(item_data.get("sellPrice", 0) or 0),
+                    "buy_price": float(item_data.get("buyPrice", 0) or 0),
+                    "stock": effective_stock,
+                    "base_unit": item_data.get("baseUnit", "unit"),
+                    "embeddings": embeddings,
+                    "has_embeddings": False,
+                    "selling_units": selling_units,
+                    "category_id": category_entry["category_id"],
+                    "category_name": category_entry["category_name"],
+                    "batches": processed_batches,
+                    "has_batches": len(processed_batches) > 0,
+                    "total_stock_from_batches": total_stock_from_batches
+                })
+
+            if category_entry["items"]:
+                shop_entry["categories"].append(category_entry)
+
+        if shop_entry["categories"]:
+            shops_result.append(shop_entry)
+
+    embedding_cache_full["shops"] = shops_result
+    embedding_cache_full["total_shops"] = len(shops_result)
+    embedding_cache_full["last_updated"] = time.time()
+
+    # ===== CRITICAL FIX: Initialize search_index if it doesn't exist =====
+    if search_index is None:
+        print("🔧 Initializing search index for the first time...")
+        search_index = SearchIndex()  # Make sure SearchIndex class is defined above
+    
+    # Build search index after cache refresh
+    print("🔨 Building search index...")
+    search_index.build(shops_result)
+
+    # Cache statistics
+    total_main_items = 0
+    total_selling_units = 0
+    total_batches = 0
+    for shop in shops_result:
+        for category in shop["categories"]:
+            total_main_items += len(category["items"])
+            for item in category["items"]:
+                total_selling_units += len(item.get("selling_units", []))
+                total_batches += len(item.get("batches", []))
+
+    print(f"\n[READY] Cached {len(shops_result)} shops, {total_main_items} main items, {total_selling_units} selling units, {total_batches} batches")
+    
+    elapsed = round((time.time()-start)*1000, 2)
+    print(f"[TIME] Cache refresh took {elapsed}ms")
     log_memory("after refresh")
-    print(f"[TIME] Cache refresh took {round((time.time()-start)*1000,2)}ms")
+    
     return shops_result
-
-# ... (rest of your code remains the same) ...
-
 
 
 
@@ -906,5 +1047,6 @@ def admin_refresh_cache():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
 
 
