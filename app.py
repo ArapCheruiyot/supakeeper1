@@ -1306,6 +1306,10 @@ def google_verify():
 print("[INIT] Preloading FULL cache (with batch tracking)...")
 try:
     db = get_firebase_client()
+    
+    # ===== CRITICAL FIX: Initialize search_index FIRST =====
+    search_index = SearchIndex()
+    
     refresh_full_item_cache()
     print("✅ Cache and search index initialized successfully")
 except Exception as e:
@@ -1340,6 +1344,7 @@ def admin_refresh_cache():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
 
 
 
