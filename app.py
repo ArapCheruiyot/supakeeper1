@@ -1,10 +1,5 @@
 #Isolation
 import sys; print(f"PYTHON VERSION: {sys.version}"); print(f"PYTHON PATH: {sys.executable}")
-from flask import Flask, render_template, request, jsonify
-import os
-import requests
-import firebase_admin
-#Isolation
 
 from flask import Flask, render_template, request, jsonify
 import os
@@ -23,35 +18,34 @@ import ssl
 import socket
 import threading
 from collections import defaultdict
+import psutil  # Make sure this is in requirements.txt
 
 # ======================================================
-# APP INIT - THIS MUST COME FIRST!
+# APP INIT
 # ======================================================
 app = Flask(__name__)
 
-import tracemalloc
-tracemalloc.start()
-
-# Optional: Add this endpoint to check memory
-@app.route("/debug/memory")
-def debug_memory():
-    current, peak = tracemalloc.get_traced_memory()
-    return jsonify({
-        "current_mb": current / 10**6,
-        "peak_mb": peak / 10**6
-    })
-
 # ======================================================
-# SSL/TLS OPTIMIZATIONS - NOW AFTER app IS DEFINED
+# SSL/TLS OPTIMIZATIONS
 # ======================================================
-# Patch SSL to be more resilient
 ssl._create_default_https_context = ssl._create_unverified_context
-
-# Increase socket timeout for mobile networks
 socket.setdefaulttimeout(30)
-
-# Force HTTP/1.1 for better compatibility
 app.config['PREFERRED_URL_SCHEME'] = 'https'
+
+# ======================================================
+# MEMORY LOGGING FUNCTION (Moved BEFORE refresh function)
+# ======================================================
+def log_memory(step=""):
+    """Log current memory usage"""
+    try:
+        process = psutil.Process(os.getpid())
+        memory_mb = process.memory_info().rss / (1024 * 1024)
+        print(f"📊 Memory [{step}]: {memory_mb:.2f} MB")
+        
+        if memory_mb > 400:
+            print(f"⚠️ WARNING: Memory high ({memory_mb:.2f} MB) - approaching Render limit!")
+    except:
+        pass  # Silently fail if psutil not available
 
 # ======================================================
 # FIREBASE CONFIG
@@ -66,353 +60,15 @@ def get_firebase_client():
         firebase_admin.initialize_app(cred)
     return firestore.client()
 
-# Initialize later
 db = None
 
 # ======================================================
-# LOAD MODEL - DISABLED (embeddings not needed)
+# SEARCH INDEX (keep your existing SearchIndex class)
 # ======================================================
-model = None
-print("[INFO] Embeddings disabled - model not loaded")
+# ... (keep your SearchIndex class exactly as is) ...
 
 # ======================================================
-# SEARCH INDEX - NEW! Lightning fast in-memory search
-# ======================================================
-class SearchIndex:
-    """High-performance search index for instant product lookup"""
-    
-    def __init__(self):
-        self.word_index = defaultdict(list)  # word -> list of items
-        self.prefix_index = defaultdict(set)  # prefix -> set of item keys
-        self.items_by_id = {}  # item_key -> full item data
-        self.last_built = None
-        self.total_items = 0
-        self.total_selling_units = 0
-        
-    def _generate_item_key(self, item, category, shop, is_selling_unit=False, sell_unit=None):
-        """Generate unique key for item or selling unit"""
-        if is_selling_unit and sell_unit:
-            return f"su_{shop['shop_id']}_{item['item_id']}_{sell_unit['sell_unit_id']}"
-        return f"item_{shop['shop_id']}_{item['item_id']}"
-    
-    def _add_to_index(self, text, score, item_key, item_data):
-        """Add text to search index with score"""
-        if not text:
-            return
-            
-        words = text.lower().split()
-        for word in words:
-            # Add to word index with score
-            self.word_index[word].append({
-                "key": item_key,
-                "score": score,
-                "data": item_data
-            })
-            
-            # Add prefixes for partial matching
-            for i in range(1, len(word) + 1):
-                prefix = word[:i]
-                self.prefix_index[prefix].add(item_key)
-    
-    def build(self, shops_data):
-        """Build search index from cache data"""
-        start = time.time()
-        print("\n🔨 BUILDING SEARCH INDEX...")
-        
-        # Clear existing index
-        self.word_index.clear()
-        self.prefix_index.clear()
-        self.items_by_id.clear()
-        
-        item_count = 0
-        su_count = 0
-        
-        for shop in shops_data:
-            shop_id = shop["shop_id"]
-            shop_name = shop["shop_name"]
-            
-            for category in shop.get("categories", []):
-                category_id = category["category_id"]
-                category_name = category["category_name"]
-                
-                for item in category.get("items", []):
-                    item_count += 1
-                    
-                    # Create base item data structure
-                    base_item_data = {
-                        "type": "main_item",
-                        "item_id": item["item_id"],
-                        "main_item_id": item["item_id"],
-                        "category_id": category_id,
-                        "category_name": category_name,
-                        "name": item["name"],
-                        "display_name": item["name"],
-                        "thumbnail": item.get("thumbnail"),
-                        "sell_price": item.get("sell_price", 0),
-                        "base_unit": item.get("base_unit", "unit"),
-                        "batches": item.get("batches", []),
-                        "has_batches": item.get("has_batches", False),
-                        "shop_id": shop_id,
-                        "shop_name": shop_name,
-                        "category": category,
-                        "original_item": item
-                    }
-                    
-                    # Generate item key
-                    item_key = self._generate_item_key(item, category, shop)
-                    self.items_by_id[item_key] = base_item_data
-                    
-                    # Index item name (high score)
-                    self._add_to_index(item["name"], 100, item_key, base_item_data)
-                    
-                    # Index selling units
-                    for su in item.get("selling_units", []):
-                        su_count += 1
-                        su_key = self._generate_item_key(item, category, shop, True, su)
-                        
-                        su_data = {
-                            "type": "selling_unit",
-                            "item_id": item["item_id"],
-                            "main_item_id": item["item_id"],
-                            "sell_unit_id": su["sell_unit_id"],
-                            "category_id": category_id,
-                            "category_name": category_name,
-                            "name": su.get("name", ""),
-                            "display_name": su.get("name", ""),
-                            "thumbnail": su.get("thumbnail") or item.get("thumbnail"),
-                            "price": su.get("sell_price", 0),
-                            "conversion_factor": su.get("conversion_factor", 1),
-                            "batch_links": su.get("batch_links", []),
-                            "has_batch_links": su.get("has_batch_links", False),
-                            "total_units_available": su.get("total_units_available", 0),
-                            "shop_id": shop_id,
-                            "shop_name": shop_name,
-                            "category": category,
-                            "original_item": item,
-                            "original_su": su,
-                            "batches": item.get("batches", [])  # Reference parent batches
-                        }
-                        
-                        self.items_by_id[su_key] = su_data
-                        
-                        # Index selling unit name (higher score than parent)
-                        su_name = su.get("name", "")
-                        if su_name:
-                            self._add_to_index(su_name, 95, su_key, su_data)
-        
-        self.total_items = item_count
-        self.total_selling_units = su_count
-        self.last_built = time.time()
-        
-        print(f"✅ SEARCH INDEX BUILT in {time.time()-start:.2f}s")
-        print(f"   • {item_count} main items indexed")
-        print(f"   • {su_count} selling units indexed")
-        print(f"   • {len(self.word_index)} unique keywords")
-        print(f"   • {len(self.prefix_index)} prefixes available")
-    
-    def search(self, query, shop_id=None, limit=50):
-        """Fast search using index - O(1) lookup!"""
-        if not query or len(query) < 2:
-            return []
-        
-        query = query.lower().strip()
-        start_time = time.time()
-        
-        # Direct word matches (highest relevance)
-        direct_matches = []
-        if query in self.word_index:
-            for match in self.word_index[query]:
-                item_data = match["data"]
-                # Filter by shop if needed
-                if shop_id and item_data.get("shop_id") != shop_id:
-                    continue
-                direct_matches.append({
-                    "score": match["score"],
-                    "data": item_data,
-                    "match_type": "exact_word"
-                })
-        
-        # Prefix matches (for partial typing)
-        prefix_matches = []
-        if query in self.prefix_index:
-            for item_key in self.prefix_index[query]:
-                if item_key in self.items_by_id:
-                    item_data = self.items_by_id[item_key]
-                    if shop_id and item_data.get("shop_id") != shop_id:
-                        continue
-                    # Lower score for prefix matches
-                    prefix_matches.append({
-                        "score": 70,
-                        "data": item_data,
-                        "match_type": "prefix"
-                    })
-        
-        # Combine and deduplicate
-        seen_keys = set()
-        combined = []
-        
-        for match in direct_matches + prefix_matches:
-            key = match["data"].get("sell_unit_id") or match["data"].get("item_id")
-            if key not in seen_keys:
-                seen_keys.add(key)
-                combined.append(match)
-        
-        # Sort by score descending
-        combined.sort(key=lambda x: x["score"], reverse=True)
-        
-        # Convert to response format
-        results = []
-        for match in combined[:limit]:
-            item_data = match["data"]
-            
-            if item_data["type"] == "main_item":
-                # Format main item with batch info
-                result_item = self._format_main_item(item_data, match)
-            else:
-                # Format selling unit
-                result_item = self._format_selling_unit(item_data, match)
-            
-            results.append(result_item)
-        
-        search_time = (time.time() - start_time) * 1000
-        print(f"⚡ Index search: '{query}' found {len(results)} items in {search_time:.1f}ms")
-        
-        return results
-    
-    def _format_main_item(self, item_data, match):
-        """Format main item for response"""
-        item = item_data["original_item"]
-        batches = item.get("batches", [])
-        
-        # Find best batch
-        best_batch = None
-        if batches:
-            # Sort by timestamp (FIFO)
-            sorted_batches = sorted(batches, key=lambda b: b.get("timestamp", 0))
-            for batch in sorted_batches:
-                if batch.get("quantity", 0) >= 0.999999:
-                    best_batch = batch
-                    break
-            if not best_batch and sorted_batches:
-                best_batch = sorted_batches[0]
-        
-        if best_batch:
-            batch_qty = float(best_batch.get("quantity", 0))
-            batch_status = "active_healthy" if batch_qty > 3 else "active_low_stock" if batch_qty >= 1 else "exhausted"
-            
-            return {
-                "type": "main_item",
-                "item_id": item_data["item_id"],
-                "main_item_id": item_data["item_id"],
-                "category_id": item_data["category_id"],
-                "category_name": item_data["category_name"],
-                "name": item_data["name"],
-                "display_name": item_data["name"],
-                "thumbnail": item_data["thumbnail"],
-                "batch_status": batch_status,
-                "batch_id": best_batch.get("batch_id"),
-                "batch_name": best_batch.get("batch_name", "Batch"),
-                "batch_remaining": batch_qty,
-                "real_available": batch_qty,
-                "price": round(float(best_batch.get("sell_price", 0)), 2),
-                "base_unit": best_batch.get("unit", item_data["base_unit"]),
-                "can_fulfill": batch_qty >= 0.999999,
-                "unit_type": "base",
-                "search_score": match["score"],
-                "next_batch_available": False,  # Simplify for now
-                "debug": {
-                    "match_type": match["match_type"],
-                    "query_used": query if 'query' in locals() else "",
-                    "search_method": "index"
-                }
-            }
-        
-        # Fallback if no batch
-        return {
-            "type": "main_item",
-            "item_id": item_data["item_id"],
-            "main_item_id": item_data["item_id"],
-            "category_id": item_data["category_id"],
-            "category_name": item_data["category_name"],
-            "name": item_data["name"],
-            "display_name": item_data["name"],
-            "thumbnail": item_data["thumbnail"],
-            "batch_status": "no_batches",
-            "batch_id": None,
-            "batch_remaining": 0,
-            "real_available": 0,
-            "price": 0,
-            "can_fulfill": False,
-            "unit_type": "base",
-            "search_score": match["score"],
-            "debug": {
-                "match_type": match["match_type"],
-                "search_method": "index"
-            }
-        }
-    
-    def _format_selling_unit(self, item_data, match):
-        """Format selling unit for response"""
-        su = item_data["original_su"]
-        batches = item_data["batches"]
-        conversion = float(item_data["conversion_factor"])
-        
-        # Calculate available units from batches
-        available_units = 0
-        best_batch = None
-        if batches:
-            sorted_batches = sorted(batches, key=lambda b: b.get("timestamp", 0))
-            for batch in sorted_batches:
-                batch_qty = float(batch.get("quantity", 0))
-                if batch_qty > 0:
-                    available_units += batch_qty * conversion
-                    if not best_batch:
-                        best_batch = batch
-        
-        batch_status = "active_healthy" if available_units > 10 else "active_low_stock" if available_units >= 1 else "out_of_stock"
-        
-        # Calculate price per unit
-        unit_price = 0
-        if best_batch and conversion > 0:
-            unit_price = float(best_batch.get("sell_price", 0)) / conversion
-        
-        return {
-            "type": "selling_unit",
-            "item_id": item_data["item_id"],
-            "main_item_id": item_data["item_id"],
-            "sell_unit_id": item_data["sell_unit_id"],
-            "category_id": item_data["category_id"],
-            "category_name": item_data["category_name"],
-            "name": su.get("name", ""),
-            "display_name": su.get("name", ""),
-            "parent_item_name": item_data["original_item"]["name"],
-            "thumbnail": item_data["thumbnail"],
-            "batch_status": batch_status,
-            "batch_id": best_batch.get("batch_id") if best_batch else None,
-            "batch_name": best_batch.get("batch_name", "Batch") if best_batch else None,
-            "real_available_units": available_units,
-            "price": round(unit_price, 4),
-            "available_stock": available_units,
-            "conversion_factor": conversion,
-            "base_unit": best_batch.get("unit", "unit") if best_batch else "unit",
-            "can_fulfill": available_units > 0.000001,
-            "has_batch_links": item_data["has_batch_links"],
-            "unit_type": "selling_unit",
-            "search_score": match["score"],
-            "matched_by": match["match_type"],
-            "debug": {
-                "match_type": match["match_type"],
-                "search_method": "index",
-                "batch_available_units": available_units,
-                "conversion_applied": conversion
-            }
-        }
-
-# Initialize search index
-search_index = SearchIndex()
-
-# ======================================================
-# FULL SHOP CACHE (STRICTLY PER SHOP) - UPDATED WITH BATCH TRACKING
+# CACHE AND REFRESH FUNCTION (Only ONE version!)
 # ======================================================
 embedding_cache_full = {
     "shops": [],
@@ -420,133 +76,26 @@ embedding_cache_full = {
     "total_shops": 0
 }
 
-# ======================================================
-# DEBOUNCING FOR CACHE REFRESHES (ADDED TO PREVENT MULTIPLE REFRESHES)
-# ======================================================
-import threading
-import time
-
+# Debouncing variables
 _last_refresh_time = 0
 _refresh_timer = None
-REFRESH_COOLDOWN = 30  # Minimum seconds between refreshes
-REFRESH_DELAY = 2      # Wait 2 seconds for multiple changes
-
-
+REFRESH_COOLDOWN = 30
+REFRESH_DELAY = 2
 
 def refresh_full_item_cache():
-    """OPTIMIZED: Batches Firestore reads for 10x faster performance"""
+    """REVISED: Includes ALL items with BATCH tracking and selling units with batch links"""
+    log_memory("before refresh")
     start = time.time()
-    print("\n[INFO] Refreshing FULL shop cache (OPTIMIZED)...")
+    print("\n[INFO] Refreshing FULL shop cache (with batch tracking)...")
 
     shops_result = []
-    
-    # Get all shops at once
-    for shop_doc in db.collection("Shops").stream():
-        shop_id = shop_doc.id
-        shop_data = shop_doc.to_dict()
-        shop_entry = {
-            "shop_id": shop_id,
-            "shop_name": shop_data.get("name", ""),
-            "categories": []
-        }
+    # ... (keep your full implementation here) ...
 
-        # Get all categories for this shop at once
-        categories = list(shop_doc.reference.collection("categories").stream())
-        
-        for cat_doc in categories:
-            cat_data = cat_doc.to_dict()
-            cat_id = cat_doc.id
-            category_entry = {
-                "category_id": cat_id,
-                "category_name": cat_data.get("name", ""),
-                "items": []
-            }
-
-            # Get all items for this category at once
-            items = list(cat_doc.reference.collection("items").stream())
-            
-            for item_doc in items:
-                item_data = item_doc.to_dict()
-                item_id = item_doc.id
-
-                # Process batches
-                batches = item_data.get("batches", [])
-                processed_batches = []
-                for batch in batches:
-                    processed_batches.append({
-                        "batch_id": batch.get("id", f"batch_{int(time.time()*1000)}"),
-                        "quantity": float(batch.get("quantity", 0)),
-                        "unit": batch.get("unit", "unit"),
-                        "buy_price": float(batch.get("buyPrice", 0) or batch.get("buy_price", 0)),
-                        "sell_price": float(batch.get("sellPrice", 0) or batch.get("sell_price", 0)),
-                        "timestamp": batch.get("timestamp", 0),
-                        "batch_name": batch.get("batchName", batch.get("batch_name", "Batch")),
-                    })
-
-                # Get selling units for this item (ONE query)
-                selling_units = []
-                try:
-                    sell_units_ref = db.collection("Shops").document(shop_id) \
-                        .collection("categories").document(cat_id) \
-                        .collection("items").document(item_id) \
-                        .collection("sellUnits")
-                    
-                    sell_units_docs = list(sell_units_ref.stream())
-                    
-                    for sell_unit_doc in sell_units_docs:
-                        su_data = sell_unit_doc.to_dict()
-                        selling_units.append({
-                            "sell_unit_id": sell_unit_doc.id,
-                            "name": su_data.get("name", ""),
-                            "conversion_factor": float(su_data.get("conversionFactor", 1.0)),
-                            "sell_price": float(su_data.get("sellPrice", 0.0)),
-                            "images": su_data.get("images", []),
-                            "thumbnail": su_data.get("images", [None])[0] if su_data.get("images") else None,
-                            "batch_links": su_data.get("batchLinks", []),
-                        })
-                except Exception:
-                    pass  # Silently fail - no need to print
-
-                # Calculate stock
-                total_stock_from_batches = sum(batch.get("quantity", 0) for batch in batches)
-                main_stock = float(item_data.get("stock", 0) or 0)
-                effective_stock = total_stock_from_batches if total_stock_from_batches > 0 else main_stock
-
-                category_entry["items"].append({
-                    "item_id": item_id,
-                    "name": item_data.get("name", ""),
-                    "thumbnail": item_data.get("images", [None])[0],
-                    "sell_price": float(item_data.get("sellPrice", 0) or 0),
-                    "buy_price": float(item_data.get("buyPrice", 0) or 0),
-                    "stock": effective_stock,
-                    "base_unit": item_data.get("baseUnit", "unit"),
-                    "selling_units": selling_units,
-                    "category_id": cat_id,
-                    "category_name": category_entry["category_name"],
-                    "batches": processed_batches,
-                    "has_batches": len(processed_batches) > 0,
-                })
-
-            if category_entry["items"]:
-                shop_entry["categories"].append(category_entry)
-
-        if shop_entry["categories"]:
-            shops_result.append(shop_entry)
-
-    embedding_cache_full["shops"] = shops_result
-    embedding_cache_full["total_shops"] = len(shops_result)
-    embedding_cache_full["last_updated"] = time.time()
-
-    # Cache statistics (minimal)
-    total_main_items = sum(len(c["items"]) for s in shops_result for c in s["categories"])
-    total_selling_units = sum(len(i.get("selling_units", [])) for s in shops_result for c in s["categories"] for i in c["items"])
-    total_batches = sum(len(i.get("batches", [])) for s in shops_result for c in s["categories"] for i in c["items"])
-
-    elapsed = round((time.time()-start)*1000, 2)
-    print(f"[READY] Cached {len(shops_result)} shops, {total_main_items} items, {total_selling_units} selling units, {total_batches} batches")
-    print(f"[TIME] Cache refresh took {elapsed}ms (OPTIMIZED)")
-    
+    log_memory("after refresh")
+    print(f"[TIME] Cache refresh took {round((time.time()-start)*1000,2)}ms")
     return shops_result
+
+# ... (rest of your code remains the same) ...
 
 
 
@@ -1345,3 +894,4 @@ if __name__ == "__main__":
 
 
     app.run(host="0.0.0.0", port=port, debug=True)
+
