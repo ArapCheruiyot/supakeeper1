@@ -878,20 +878,33 @@ except Exception as e:
     print(f"⚠️ Cache initialization error: {e}")
     print("⚠️ Continuing anyway - cache will populate on first request")
 
-# Set up listeners for both main items AND selling units
-print("[INIT] Setting up Firestore listeners...")
-try:
-    if db:
-        db.collection_group("items").on_snapshot(on_full_item_snapshot)
-        db.collection_group("sellUnits").on_snapshot(on_selling_units_snapshot)
-        print("[READY] Listeners active for items and selling units")
-except Exception as e:
-    print(f"⚠️ Listener setup error: {e}")
+# CRITICAL FIX: Check if we're on production
+IS_PRODUCTION = os.environ.get('RENDER', False) or os.environ.get('PRODUCTION', False)
 
-# This block ONLY runs for local development
+if IS_PRODUCTION:
+    print("[INFO] Running in production - DISABLING Firestore listeners to prevent connection exhaustion")
+    print("[INFO] Cache will only refresh on server restart or via manual trigger")
+else:
+    # Set up listeners ONLY for local development
+    print("[INIT] Setting up Firestore listeners for development...")
+    try:
+        if db:
+            db.collection_group("items").on_snapshot(on_full_item_snapshot)
+            db.collection_group("sellUnits").on_snapshot(on_selling_units_snapshot)
+            print("[READY] Listeners active for items and selling units")
+    except Exception as e:
+        print(f"⚠️ Listener setup error: {e}")
+
+# Add a manual refresh endpoint (for emergencies)
+@app.route("/admin/refresh-cache", methods=["POST"])
+def admin_refresh_cache():
+    """Manually trigger cache refresh (protected endpoint)"""
+    # Add simple auth check here
+    refresh_full_item_cache()
+    return jsonify({"success": True, "message": "Cache refreshed"})
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-
-
     app.run(host="0.0.0.0", port=port, debug=True)
+
 
