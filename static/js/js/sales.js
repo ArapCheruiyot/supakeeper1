@@ -1002,7 +1002,7 @@ function createSalesOverlay() {
 }
 
 // ====================================================
-// SEARCH FUNCTIONS - FIXED WITH FALLBACK
+// SEARCH FUNCTIONS - OPTIMIZED FOR SPEED
 // ====================================================
 
 function clearSearchResults() {
@@ -1048,6 +1048,7 @@ async function onSearchInput(query) {
         return;
     }
 
+    // Show "type more" message for single character
     if (query.length < 2) {
         results.innerHTML = `
             <div style="
@@ -1077,9 +1078,12 @@ async function onSearchInput(query) {
         return;
     }
 
+    // ⚡ OPTIMIZED: Shorter delay for faster response
+    // 150ms is fast enough for quick typists but not too fast for the server
     searchTimeout = setTimeout(async () => {
         console.log(`🔍 SEARCH: "${query}"`);
         
+        // Show loading state
         results.innerHTML = `
             <div style="
                 display: flex;
@@ -1101,7 +1105,7 @@ async function onSearchInput(query) {
             </div>
         `;
         
-        // Add spinner animation
+        // Add spinner animation if needed
         if (!document.getElementById('spinner-styles')) {
             const style = document.createElement('style');
             style.id = 'spinner-styles';
@@ -1115,7 +1119,7 @@ async function onSearchInput(query) {
         }
         
         try {
-            // Try backend first if it's enabled
+            // Try backend first
             if (useBackend) {
                 try {
                     const startTime = Date.now();
@@ -1142,122 +1146,99 @@ async function onSearchInput(query) {
                     });
                     
                     if (!data.items?.length) {
-                        results.innerHTML = `
-                            <div style="
-                                display: flex;
-                                flex-direction: column;
-                                align-items: center;
-                                justify-content: center;
-                                min-height: 300px;
-                                color: #64748b;
-                                text-align: center;
-                            ">
-                                <div style="
-                                    width: 100px;
-                                    height: 100px;
-                                    background: white;
-                                    border-radius: 50px;
-                                    display: flex;
-                                    align-items: center;
-                                    justify-content: center;
-                                    margin-bottom: 20px;
-                                ">
-                                    <span style="font-size: 40px;">🔍</span>
-                                </div>
-                                <h3 style="margin:0 0 8px; color: #334155; font-size:18px;">No items found / Hakuna bidhaa</h3>
-                                <p style="margin:0; color: #64748b; font-size:14px;">Try a different search term / Jaribu maneno mengine</p>
-                            </div>
-                        `;
+                        showNoResults(results);
                         return;
                     }
                     
-                    // Store results and render
+                    // Store and render results
                     lastSearchResults = data.items;
                     lastSearchQuery = query;
                     renderResults(data.items);
-                    return; // Success! Exit function
+                    return;
                     
                 } catch (backendError) {
                     console.log('⚠️ Backend search failed, trying local fallback...', backendError);
-                    useBackend = false; // Disable backend for future searches
-                    // Continue to fallback below
+                    useBackend = false;
                 }
             }
             
-            // ====================================================
-            // FALLBACK: Local search from Firestore
-            // ====================================================
+            // Fallback to local search
             console.log('🔍 Using local fallback search for:', query);
-            
-            // Get all categories and items from Firestore
             const items = await searchLocalFirestore(query);
             
             if (!items || items.length === 0) {
-                results.innerHTML = `
-                    <div style="
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                        min-height: 300px;
-                        color: #64748b;
-                        text-align: center;
-                    ">
-                        <div style="
-                            width: 100px;
-                            height: 100px;
-                            background: white;
-                            border-radius: 50px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            margin-bottom: 20px;
-                        ">
-                            <span style="font-size: 40px;">🔍</span>
-                        </div>
-                        <h3 style="margin:0 0 8px; color: #334155; font-size:18px;">No items found / Hakuna bidhaa</h3>
-                        <p style="margin:0; color: #64748b; font-size:14px;">Try a different search term / Jaribu maneno mengine</p>
-                    </div>
-                `;
+                showNoResults(results);
                 return;
             }
             
-            // Store results and render
             lastSearchResults = items;
             lastSearchQuery = query;
             renderResults(items);
             
         } catch (error) {
-            console.error('❌ Search failed completely:', error);
-            
-            results.innerHTML = `
-                <div style="
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    min-height: 300px;
-                    color: #64748b;
-                    text-align: center;
-                ">
-                    <div style="
-                        width: 100px;
-                        height: 100px;
-                        background: #fee2e2;
-                        border-radius: 50px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        margin-bottom: 20px;
-                    ">
-                        <span style="font-size: 40px;">❌</span>
-                    </div>
-                    <h3 style="margin:0 0 8px; color: #dc2626; font-size:18px;">Search failed / Imeshindwa kutafuta</h3>
-                    <p style="margin:0; color: #64748b; font-size:14px;">Please try again / Tafadhali jaribu tena</p>
-                </div>
-            `;
+            console.error('❌ Search failed:', error);
+            showError(results);
         }
-    }, 300);
+    }, 150); // ⚡ REDUCED FROM 300ms TO 150ms
+}
+
+// Helper functions for cleaner code
+function showNoResults(container) {
+    container.innerHTML = `
+        <div style="
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 300px;
+            color: #64748b;
+            text-align: center;
+        ">
+            <div style="
+                width: 100px;
+                height: 100px;
+                background: white;
+                border-radius: 50px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-bottom: 20px;
+            ">
+                <span style="font-size: 40px;">🔍</span>
+            </div>
+            <h3 style="margin:0 0 8px; color: #334155; font-size:18px;">No items found / Hakuna bidhaa</h3>
+            <p style="margin:0; color: #64748b; font-size:14px;">Try a different search term / Jaribu maneno mengine</p>
+        </div>
+    `;
+}
+
+function showError(container) {
+    container.innerHTML = `
+        <div style="
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 300px;
+            color: #64748b;
+            text-align: center;
+        ">
+            <div style="
+                width: 100px;
+                height: 100px;
+                background: #fee2e2;
+                border-radius: 50px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-bottom: 20px;
+            ">
+                <span style="font-size: 40px;">❌</span>
+            </div>
+            <h3 style="margin:0 0 8px; color: #dc2626; font-size:18px;">Search failed / Imeshindwa kutafuta</h3>
+            <p style="margin:0; color: #64748b; font-size:14px;">Please try again / Tafadhali jaribu tena</p>
+        </div>
+    `;
 }
 
 // ====================================================
