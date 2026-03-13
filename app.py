@@ -63,9 +63,301 @@ def get_firebase_client():
 db = None
 
 # ======================================================
-# SEARCH INDEX (keep your existing SearchIndex class)
+# SEARCH INDEX - Lightning fast in-memory search
 # ======================================================
-# ... (keep your SearchIndex class exactly as is) ...
+class SearchIndex:
+    """High-performance search index for instant product lookup"""
+    
+    def __init__(self):
+        self.word_index = defaultdict(list)
+        self.prefix_index = defaultdict(set)
+        self.items_by_id = {}
+        self.last_built = None
+        self.total_items = 0
+        self.total_selling_units = 0
+        
+    def _generate_item_key(self, item, category, shop, is_selling_unit=False, sell_unit=None):
+        if is_selling_unit and sell_unit:
+            return f"su_{shop['shop_id']}_{item['item_id']}_{sell_unit['sell_unit_id']}"
+        return f"item_{shop['shop_id']}_{item['item_id']}"
+    
+    def _add_to_index(self, text, score, item_key, item_data):
+        if not text:
+            return
+        words = text.lower().split()
+        for word in words:
+            self.word_index[word].append({
+                "key": item_key,
+                "score": score,
+                "data": item_data
+            })
+            for i in range(1, len(word) + 1):
+                prefix = word[:i]
+                self.prefix_index[prefix].add(item_key)
+    
+    def build(self, shops_data):
+        start = time.time()
+        print("\n🔨 BUILDING SEARCH INDEX...")
+        
+        self.word_index.clear()
+        self.prefix_index.clear()
+        self.items_by_id.clear()
+        
+        item_count = 0
+        su_count = 0
+        
+        for shop in shops_data:
+            shop_id = shop["shop_id"]
+            shop_name = shop["shop_name"]
+            
+            for category in shop.get("categories", []):
+                category_id = category["category_id"]
+                category_name = category["category_name"]
+                
+                for item in category.get("items", []):
+                    item_count += 1
+                    
+                    base_item_data = {
+                        "type": "main_item",
+                        "item_id": item["item_id"],
+                        "main_item_id": item["item_id"],
+                        "category_id": category_id,
+                        "category_name": category_name,
+                        "name": item["name"],
+                        "display_name": item["name"],
+                        "thumbnail": item.get("thumbnail"),
+                        "sell_price": item.get("sell_price", 0),
+                        "base_unit": item.get("base_unit", "unit"),
+                        "batches": item.get("batches", []),
+                        "has_batches": item.get("has_batches", False),
+                        "shop_id": shop_id,
+                        "shop_name": shop_name,
+                        "category": category,
+                        "original_item": item
+                    }
+                    
+                    item_key = self._generate_item_key(item, category, shop)
+                    self.items_by_id[item_key] = base_item_data
+                    self._add_to_index(item["name"], 100, item_key, base_item_data)
+                    
+                    for su in item.get("selling_units", []):
+                        su_count += 1
+                        su_key = self._generate_item_key(item, category, shop, True, su)
+                        
+                        su_data = {
+                            "type": "selling_unit",
+                            "item_id": item["item_id"],
+                            "main_item_id": item["item_id"],
+                            "sell_unit_id": su["sell_unit_id"],
+                            "category_id": category_id,
+                            "category_name": category_name,
+                            "name": su.get("name", ""),
+                            "display_name": su.get("name", ""),
+                            "thumbnail": su.get("thumbnail") or item.get("thumbnail"),
+                            "price": su.get("sell_price", 0),
+                            "conversion_factor": su.get("conversion_factor", 1),
+                            "batch_links": su.get("batch_links", []),
+                            "has_batch_links": su.get("has_batch_links", False),
+                            "total_units_available": su.get("total_units_available", 0),
+                            "shop_id": shop_id,
+                            "shop_name": shop_name,
+                            "category": category,
+                            "original_item": item,
+                            "original_su": su,
+                            "batches": item.get("batches", [])
+                        }
+                        
+                        self.items_by_id[su_key] = su_data
+                        su_name = su.get("name", "")
+                        if su_name:
+                            self._add_to_index(su_name, 95, su_key, su_data)
+        
+        self.total_items = item_count
+        self.total_selling_units = su_count
+        self.last_built = time.time()
+        
+        print(f"✅ SEARCH INDEX BUILT in {time.time()-start:.2f}s")
+        print(f"   • {item_count} main items indexed")
+        print(f"   • {su_count} selling units indexed")
+        print(f"   • {len(self.word_index)} unique keywords")
+        print(f"   • {len(self.prefix_index)} prefixes available")
+    
+    def search(self, query, shop_id=None, limit=50):
+        if not query or len(query) < 2:
+            return []
+        
+        query = query.lower().strip()
+        start_time = time.time()
+        
+        direct_matches = []
+        if query in self.word_index:
+            for match in self.word_index[query]:
+                item_data = match["data"]
+                if shop_id and item_data.get("shop_id") != shop_id:
+                    continue
+                direct_matches.append({
+                    "score": match["score"],
+                    "data": item_data,
+                    "match_type": "exact_word"
+                })
+        
+        prefix_matches = []
+        if query in self.prefix_index:
+            for item_key in self.prefix_index[query]:
+                if item_key in self.items_by_id:
+                    item_data = self.items_by_id[item_key]
+                    if shop_id and item_data.get("shop_id") != shop_id:
+                        continue
+                    prefix_matches.append({
+                        "score": 70,
+                        "data": item_data,
+                        "match_type": "prefix"
+                    })
+        
+        seen_keys = set()
+        combined = []
+        for match in direct_matches + prefix_matches:
+            key = match["data"].get("sell_unit_id") or match["data"].get("item_id")
+            if key not in seen_keys:
+                seen_keys.add(key)
+                combined.append(match)
+        
+        combined.sort(key=lambda x: x["score"], reverse=True)
+        
+        results = []
+        for match in combined[:limit]:
+            item_data = match["data"]
+            if item_data["type"] == "main_item":
+                result_item = self._format_main_item(item_data, match)
+            else:
+                result_item = self._format_selling_unit(item_data, match)
+            results.append(result_item)
+        
+        search_time = (time.time() - start_time) * 1000
+        print(f"⚡ Index search: '{query}' found {len(results)} items in {search_time:.1f}ms")
+        
+        return results
+    
+    def _format_main_item(self, item_data, match):
+        item = item_data["original_item"]
+        batches = item.get("batches", [])
+        
+        best_batch = None
+        if batches:
+            sorted_batches = sorted(batches, key=lambda b: b.get("timestamp", 0))
+            for batch in sorted_batches:
+                if batch.get("quantity", 0) >= 0.999999:
+                    best_batch = batch
+                    break
+            if not best_batch and sorted_batches:
+                best_batch = sorted_batches[0]
+        
+        if best_batch:
+            batch_qty = float(best_batch.get("quantity", 0))
+            batch_status = "active_healthy" if batch_qty > 3 else "active_low_stock" if batch_qty >= 1 else "exhausted"
+            
+            return {
+                "type": "main_item",
+                "item_id": item_data["item_id"],
+                "main_item_id": item_data["item_id"],
+                "category_id": item_data["category_id"],
+                "category_name": item_data["category_name"],
+                "name": item_data["name"],
+                "display_name": item_data["name"],
+                "thumbnail": item_data["thumbnail"],
+                "batch_status": batch_status,
+                "batch_id": best_batch.get("batch_id"),
+                "batch_name": best_batch.get("batch_name", "Batch"),
+                "batch_remaining": batch_qty,
+                "real_available": batch_qty,
+                "price": round(float(best_batch.get("sell_price", 0)), 2),
+                "base_unit": best_batch.get("unit", item_data["base_unit"]),
+                "can_fulfill": batch_qty >= 0.999999,
+                "unit_type": "base",
+                "search_score": match["score"],
+                "next_batch_available": False,
+                "debug": {
+                    "match_type": match["match_type"],
+                    "search_method": "index"
+                }
+            }
+        
+        return {
+            "type": "main_item",
+            "item_id": item_data["item_id"],
+            "main_item_id": item_data["item_id"],
+            "category_id": item_data["category_id"],
+            "category_name": item_data["category_name"],
+            "name": item_data["name"],
+            "display_name": item_data["name"],
+            "thumbnail": item_data["thumbnail"],
+            "batch_status": "no_batches",
+            "batch_id": None,
+            "batch_remaining": 0,
+            "real_available": 0,
+            "price": 0,
+            "can_fulfill": False,
+            "unit_type": "base",
+            "search_score": match["score"],
+            "debug": {
+                "match_type": match["match_type"],
+                "search_method": "index"
+            }
+        }
+    
+    def _format_selling_unit(self, item_data, match):
+        su = item_data["original_su"]
+        batches = item_data["batches"]
+        conversion = float(item_data["conversion_factor"])
+        
+        available_units = 0
+        best_batch = None
+        if batches:
+            sorted_batches = sorted(batches, key=lambda b: b.get("timestamp", 0))
+            for batch in sorted_batches:
+                batch_qty = float(batch.get("quantity", 0))
+                if batch_qty > 0:
+                    available_units += batch_qty * conversion
+                    if not best_batch:
+                        best_batch = batch
+        
+        batch_status = "active_healthy" if available_units > 10 else "active_low_stock" if available_units >= 1 else "out_of_stock"
+        
+        unit_price = 0
+        if best_batch and conversion > 0:
+            unit_price = float(best_batch.get("sell_price", 0)) / conversion
+        
+        return {
+            "type": "selling_unit",
+            "item_id": item_data["item_id"],
+            "main_item_id": item_data["item_id"],
+            "sell_unit_id": item_data["sell_unit_id"],
+            "category_id": item_data["category_id"],
+            "category_name": item_data["category_name"],
+            "name": su.get("name", ""),
+            "display_name": su.get("name", ""),
+            "parent_item_name": item_data["original_item"]["name"],
+            "thumbnail": item_data["thumbnail"],
+            "batch_status": batch_status,
+            "batch_id": best_batch.get("batch_id") if best_batch else None,
+            "batch_name": best_batch.get("batch_name", "Batch") if best_batch else None,
+            "real_available_units": available_units,
+            "price": round(unit_price, 4),
+            "available_stock": available_units,
+            "conversion_factor": conversion,
+            "base_unit": best_batch.get("unit", "unit") if best_batch else "unit",
+            "can_fulfill": available_units > 0.000001,
+            "has_batch_links": item_data["has_batch_links"],
+            "unit_type": "selling_unit",
+            "search_score": match["score"],
+            "matched_by": match["match_type"],
+            "debug": {
+                "match_type": match["match_type"],
+                "search_method": "index",
+                "batch_available_units": available_units,
+                "conversion_applied": conversion
+            }
+        }
 
 # ======================================================
 # CACHE AND REFRESH FUNCTION (Only ONE version!)
@@ -1048,6 +1340,7 @@ def admin_refresh_cache():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
 
 
 
