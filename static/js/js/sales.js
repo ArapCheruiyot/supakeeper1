@@ -2,7 +2,9 @@
 // EMERGENCY FIX: Added backend data mismatch handling + Fixed search 404 error
 // STAFF FIX: Added proper shop ID resolution for staff logins
 // UX FIX: Results persist after tapping + Professional modern design
-// AUDIO FIX: Added beep sound when user taps an item
+// AUDIO FIX: Added beep sound using Web Audio API (no file needed)
+// CURRENCY: Changed from $ to KSh for Kenyan market
+// RESPONSIVE FIX: Added mobile-optimized badge positioning + compact card styles
 
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { db } from "./firebase-config.js";
@@ -19,49 +21,145 @@ let useBackend = true; // Try backend first, fallback to local search
 let lastSearchResults = []; // Store last search results for persistence
 let lastSearchQuery = ''; // Store last search query
 
-// Audio for beep sound
-let beepAudio = null;
+// Audio for beep sound - using Web Audio API
+let audioContext = null;
 
 const NAV_HEIGHT = 64;
 
 // ====================================================
-// AUDIO HELPER FUNCTIONS - BEEP SOUND
+// RESPONSIVE STYLES - ADDED FOR MOBILE OPTIMIZATION
+// ====================================================
+(function addResponsiveStyles() {
+    if (!document.getElementById('sales-responsive-styles')) {
+        const style = document.createElement('style');
+        style.id = 'sales-responsive-styles';
+        style.textContent = `
+            /* Base styles for all screens */
+            .sales-item-card .stock-badge {
+                position: absolute;
+                top: 16px;
+                right: 16px;
+                padding: 6px 12px;
+                font-size: 12px;
+                border-radius: 30px;
+                font-weight: 600;
+                letter-spacing: 0.3px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                z-index: 5;
+                max-width: 150px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            
+            /* Mobile styles (screens smaller than 480px) */
+            @media (max-width: 480px) {
+                .sales-item-card .stock-badge {
+                    top: 8px;
+                    right: 8px;
+                    padding: 3px 8px;
+                    font-size: 9px;
+                    max-width: 100px;
+                }
+                
+                .sales-item-card {
+                    padding: 12px !important;
+                }
+                
+                .sales-item-card .item-thumbnail {
+                    width: 50px !important;
+                    height: 50px !important;
+                }
+                
+                .sales-item-card .item-name {
+                    font-size: 15px !important;
+                    margin-bottom: 4px !important;
+                }
+                
+                .sales-item-card .item-price {
+                    font-size: 18px !important;
+                }
+                
+                .sales-item-card .stock-text {
+                    font-size: 11px !important;
+                }
+                
+                .sales-item-card .conversion-info {
+                    font-size: 11px !important;
+                    margin-top: 2px !important;
+                    padding-top: 4px !important;
+                }
+            }
+            
+            /* Very small screens (under 360px) */
+            @media (max-width: 360px) {
+                .sales-item-card .stock-badge {
+                    top: 4px;
+                    right: 4px;
+                    padding: 2px 6px;
+                    font-size: 8px;
+                    max-width: 80px;
+                }
+                
+                .sales-item-card {
+                    padding: 8px !important;
+                }
+                
+                .sales-item-card .item-thumbnail {
+                    width: 40px !important;
+                    height: 40px !important;
+                }
+                
+                .sales-item-card .item-name {
+                    font-size: 14px !important;
+                }
+                
+                .sales-item-card .item-price {
+                    font-size: 16px !important;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+})();
+
+// ====================================================
+// AUDIO HELPER FUNCTIONS - NO FILE NEEDED!
 // ====================================================
 
 /**
- * Initialize the beep sound audio object
- */
-function initBeepSound() {
-    try {
-        if (!beepAudio) {
-            beepAudio = new Audio('/static/audios/beep.mp3');
-            beepAudio.volume = 0.3; // Set volume to 100% - not too loud
-            console.log('✅ Beep sound initialized');
-        }
-    } catch (error) {
-        console.warn('⚠️ Could not initialize beep sound:', error);
-    }
-}
-
-/**
- * Play the beep sound
+ * Play a beep sound using Web Audio API (works everywhere, no file needed)
  */
 function playBeep() {
     try {
-        if (!beepAudio) {
-            initBeepSound();
+        // Create audio context on first use
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
         
-        // Clone the audio to allow overlapping sounds
-        const beepClone = beepAudio.cloneNode();
-        beepClone.volume = 0.3;
-        beepClone.play().catch(error => {
-            // Silently fail - audio is not critical
-            console.debug('Beep playback failed:', error);
-        });
+        // Create oscillator
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        // Configure beep sound
+        oscillator.type = 'sine';      // Smooth sine wave
+        oscillator.frequency.value = 800; // 800Hz frequency
+        
+        // Volume envelope (quick fade in/out)
+        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+        
+        // Play
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.1);
+        
+        console.debug('✅ Beep played (Web Audio)');
     } catch (error) {
         // Silently fail - audio is not critical
-        console.debug('Beep error:', error);
+        console.debug('Beep failed:', error);
     }
 }
 
@@ -696,6 +794,9 @@ async function handleOneTap(item) {
             
         } else {
             console.log('❌ Failed to add to cart');
+            // Check why it failed
+            console.log('cartIcon object:', window.cartIcon);
+            console.log('addItem function exists:', typeof window.cartIcon.addItem === 'function');
             showNotification('Failed to add to cart / Imeshindwa kuongeza kwenye kikapu', 'error');
         }
         
@@ -703,6 +804,7 @@ async function handleOneTap(item) {
         return success;
     } else {
         console.log('❌ Cart system not loaded');
+        console.log('window.cartIcon:', window.cartIcon);
         showNotification('Cart system not ready. Please refresh. / Mfumo wa kikapu hauko tayari. Tafadhali onyesha upya.', 'error');
         console.groupEnd();
         return false;
@@ -779,7 +881,7 @@ function showNotification(message, type = 'info', duration = 3000) {
 }
 
 // ====================================================
-// SALES OVERLAY (ONE-TAP VERSION) WITH BILINGUAL TEXT - PROFESSIONAL DESIGN
+// SALES OVERLAY (ONE-TAP VERSION) - COMPACT HEADER DESIGN
 // ====================================================
 
 function createSalesOverlay() {
@@ -802,31 +904,29 @@ function createSalesOverlay() {
     `;
 
     salesOverlay.innerHTML = `
-        <!-- Header - Fixed at top with professional gradient -->
+        <!-- Header - Compact design to maximize space for items -->
         <div style="
             background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
             color: white;
-            padding: 20px 24px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            padding: 12px 16px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             flex-shrink:0;
             border-bottom: 1px solid rgba(255,255,255,0.1);
         ">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-                <div>
-                    <h1 style="margin:0; font-size:24px; font-weight:700; display:flex; align-items:center; gap:8px;">
-                        <span style="font-size:28px;">🛍️</span>
-                        <span>One-Tap Sale</span>
-                    </h1>
-                    <p style="margin:6px 0 0; color:#94a3b8; font-size:14px;">Tap once = 1 item added to cart / Gusa mara moja = bidhaa 1 kwenye kikapu</p>
-                </div>
+            <!-- Title row with close button only -->
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <h1 style="margin:0; font-size:20px; font-weight:600; display:flex; align-items:center; gap:6px;">
+                    <span style="font-size:22px;">🛍️</span>
+                    <span>One-Tap Sale</span>
+                </h1>
                 <button id="close-sales" style="
                     background: rgba(255,255,255,0.1);
                     border: 1px solid rgba(255,255,255,0.2);
                     color: white;
-                    width: 44px;
-                    height: 44px;
-                    border-radius: 12px;
-                    font-size: 24px;
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 10px;
+                    font-size: 22px;
                     cursor: pointer;
                     display: flex;
                     align-items: center;
@@ -835,87 +935,108 @@ function createSalesOverlay() {
                 ">×</button>
             </div>
             
-            <!-- Search Box - Modern design -->
-            <div style="position:relative;">
+            <!-- Search Box - Compact -->
+            <div style="position:relative; margin-bottom:8px;">
                 <div style="
                     position:absolute; 
-                    left:16px; 
+                    left:12px; 
                     top:50%; 
                     transform:translateY(-50%); 
                     color: #94a3b8; 
-                    font-size:18px; 
+                    font-size:16px; 
                     z-index:1;
                 ">🔍</div>
                 <input 
                     id="sales-search-input" 
-                    placeholder="Search products / Tafuta bidhaa (type 2+ letters / andika herufi 2+)..." 
+                    placeholder="Search products / Tafuta bidhaa..." 
                     style="
                         width:100%; 
-                        padding:16px 20px 16px 48px; 
+                        padding: 10px 12px 10px 38px; 
                         border: none; 
-                        border-radius: 14px; 
-                        font-size:16px; 
-                        background: rgba(255,255,255,0.05);
+                        border-radius: 30px; 
+                        font-size:14px; 
+                        background: rgba(255,255,255,0.08);
                         color: white;
                         box-sizing:border-box;
                         border: 1px solid rgba(255,255,255,0.1);
                         transition: all 0.2s;
                     "
-                    onfocus="this.style.background='rgba(255,255,255,0.1)'; this.style.borderColor='#3b82f6'"
-                    onblur="this.style.background='rgba(255,255,255,0.05)'; this.style.borderColor='rgba(255,255,255,0.1)'"
+                    onfocus="this.style.background='rgba(255,255,255,0.15)'; this.style.borderColor='#3b82f6'"
+                    onblur="this.style.background='rgba(255,255,255,0.08)'; this.style.borderColor='rgba(255,255,255,0.1)'"
                 >
                 <div id="search-clear" style="
                     position:absolute; 
-                    right:16px; 
+                    right:12px; 
                     top:50%; 
                     transform:translateY(-50%); 
                     color: #94a3b8; 
-                    font-size:20px; 
+                    font-size:16px; 
                     cursor:pointer; 
                     display:none; 
                     z-index:1;
-                    width: 32px;
-                    height: 32px;
+                    width: 28px;
+                    height: 28px;
                     background: rgba(255,255,255,0.1);
-                    border-radius: 8px;
+                    border-radius: 50%;
                     display: flex;
                     align-items: center;
                     justify-content: center;
                 ">×</div>
             </div>
             
-          <!-- Batch Legend - Compact toolbar -->
-<div style="
-    display: flex;
-    gap: 16px;
-    margin-top: 12px;
-    padding: 8px 0;
-    border-top: 1px solid rgba(255,255,255,0.1);
-">
-    <div style="display: flex; align-items: center; gap: 4px;" title="Good stock / Ipo kutosha">
-        <div style="width: 10px; height: 10px; background: #2ed573; border-radius: 50%;"></div>
-        <span style="color: #94a3b8; font-size: 11px;">Stock</span>
-    </div>
-    <div style="display: flex; align-items: center; gap: 4px;" title="Last item / Kipande cha mwisho">
-        <div style="width: 10px; height: 10px; background: #ffa502; border-radius: 50%;"></div>
-        <span style="color: #94a3b8; font-size: 11px;">Last</span>
-    </div>
-    <div style="display: flex; align-items: center; gap: 4px;" title="Out of stock / Imeisha">
-        <div style="width: 10px; height: 10px; background: #ff6b6b; border-radius: 50%;"></div>
-        <span style="color: #94a3b8; font-size: 11px;">Out</span>
-    </div>
-    <div style="display: flex; align-items: center; gap: 4px;" title="Auto-switch ready / Tayari kubadilisha">
-        <div style="width: 10px; height: 10px; background: #9b59b6; border-radius: 50%;"></div>
-        <span style="color: #94a3b8; font-size: 11px;">Switch</span>
-    </div>
-</div>
+            <!-- Toolbar - Batch legend and View Products button on same line -->
+            <div style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-top: 4px;
+            ">
+                <!-- Batch Legend - Compact -->
+                <div style="display: flex; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 3px;" title="Good stock / Ipo kutosha">
+                        <div style="width: 8px; height: 8px; background: #2ed573; border-radius: 50%;"></div>
+                        <span style="color: #94a3b8; font-size: 10px;">Stock</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 3px;" title="Last item / Kipande cha mwisho">
+                        <div style="width: 8px; height: 8px; background: #ffa502; border-radius: 50%;"></div>
+                        <span style="color: #94a3b8; font-size: 10px;">Last</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 3px;" title="Out of stock / Imeisha">
+                        <div style="width: 8px; height: 8px; background: #ff6b6b; border-radius: 50%;"></div>
+                        <span style="color: #94a3b8; font-size: 10px;">Out</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 3px;" title="Auto-switch ready / Tayari kubadilisha">
+                        <div style="width: 8px; height: 8px; background: #9b59b6; border-radius: 50%;"></div>
+                        <span style="color: #94a3b8; font-size: 10px;">Switch</span>
+                    </div>
+                </div>
+                
+                <!-- View Products Button -->
+                <button id="view-products-btn" style="
+                    background: rgba(34,197,94,0.15);
+                    border: 1px solid rgba(34,197,94,0.3);
+                    color: #22c55e;
+                    padding: 4px 12px;
+                    border-radius: 30px;
+                    font-size: 12px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                    white-space: nowrap;
+                    transition: all 0.2s;
+                ">
+                    <span style="font-size:14px;">📋</span> View Products
+                </button>
+            </div>
         </div>
 
-        <!-- Results - Scrollable area with professional card design -->
+        <!-- Results - Now gets maximum space -->
         <div id="sales-results" style="
             flex:1; 
             overflow-y:auto; 
-            padding: 24px; 
+            padding: 16px; 
             background: #f1f5f9;
             -webkit-overflow-scrolling:touch;
         ">
@@ -924,51 +1045,39 @@ function createSalesOverlay() {
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                min-height: 300px;
+                min-height: 200px;
                 color: #64748b;
                 text-align: center;
             ">
                 <div style="
-                    width: 120px;
-                    height: 120px;
+                    width: 80px;
+                    height: 80px;
                     background: white;
-                    border-radius: 60px;
+                    border-radius: 40px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    margin-bottom: 24px;
-                    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+                    margin-bottom: 16px;
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
                 ">
-                    <span style="font-size: 48px;">🔍</span>
+                    <span style="font-size: 36px;">🔍</span>
                 </div>
-                <h3 style="margin:0 0 8px; color: #334155; font-size:20px; font-weight:600;">Search Products / Tafuta Bidhaa</h3>
-                <p style="margin:0; color: #64748b; font-size:15px;">Type 2+ letters to search / Andika herufi 2+ kutafuta</p>
+                <h3 style="margin:0 0 4px; color: #334155; font-size:18px; font-weight:600;">Search Products</h3>
+                <p style="margin:0; color: #64748b; font-size:14px;">Type 2+ letters to search</p>
             </div>
         </div>
         
-        <!-- Info Footer - Clean and professional -->
+        <!-- Info Footer - Minimal -->
         <div style="
-            padding: 16px 24px; 
+            padding: 8px 16px; 
             background: white; 
             border-top: 1px solid #e2e8f0; 
-            color: #475569; 
-            font-size: 13px; 
+            color: #64748b; 
+            font-size: 11px; 
             text-align: center; 
             flex-shrink:0;
-            box-shadow: 0 -4px 10px rgba(0,0,0,0.02);
         ">
-            <div style="display: flex; flex-direction: column; gap: 6px;">
-                <div style="display: flex; align-items: center; justify-content: center; gap: 16px;">
-                    <span style="display: flex; align-items: center; gap: 4px;">👆 <span>One tap = 1 item</span></span>
-                    <span style="color: #cbd5e1;">•</span>
-                    <span style="display: flex; align-items: center; gap: 4px;">🔄 <span>Auto-switch batches</span></span>
-                    <span style="color: #cbd5e1;">•</span>
-                    <span style="display: flex; align-items: center; gap: 4px;">🚨 <span>Emergency fix active</span></span>
-                </div>
-                <div style="opacity:0.7; font-size:12px; border-top:1px dashed #e2e8f0; padding-top:6px;">
-                    👆 Gusa mara moja = bidhaa 1 • Mfumo unabadilisha batches zilizoisha • Dharura imewashwa
-                </div>
-            </div>
+            <span>👆 Tap = 1 item • 🔄 Auto-switch batches</span>
         </div>
     `;
 
@@ -1079,7 +1188,6 @@ async function onSearchInput(query) {
     }
 
     // ⚡ OPTIMIZED: Shorter delay for faster response
-    // 150ms is fast enough for quick typists but not too fast for the server
     searchTimeout = setTimeout(async () => {
         console.log(`🔍 SEARCH: "${query}"`);
         
@@ -1179,7 +1287,7 @@ async function onSearchInput(query) {
             console.error('❌ Search failed:', error);
             showError(results);
         }
-    }, 150); // ⚡ REDUCED FROM 300ms TO 150ms
+    }, 150);
 }
 
 // Helper functions for cleaner code
@@ -1336,7 +1444,7 @@ async function searchLocalFirestore(query) {
 }
 
 // ====================================================
-// RENDER RESULTS WITH ONE-TAP FUNCTIONALITY - PROFESSIONAL CARDS
+// RENDER RESULTS WITH ONE-TAP FUNCTIONALITY - PROFESSIONAL CARDS (UPDATED WITH KSh + RESPONSIVE CLASS)
 // ====================================================
 
 function renderResults(items) {
@@ -1490,6 +1598,7 @@ function renderItemCard(item, resultsContainer) {
     card.dataset.itemId = item.item_id;
     card.dataset.batchId = item.batch_id;
     card.dataset.canAdd = canAdd;
+    card.classList.add('sales-item-card'); // ADDED: Class for responsive styling
     
     card.style.cssText = `
         background: white;
@@ -1524,19 +1633,7 @@ function renderItemCard(item, resultsContainer) {
 
     card.innerHTML = `
         ${batchIndicator ? `
-            <div style="
-                position:absolute; 
-                top:16px; 
-                right:16px; 
-                background: ${stockColor}; 
-                color: white; 
-                padding: 6px 12px; 
-                border-radius: 30px; 
-                font-size: 12px; 
-                font-weight: 600;
-                letter-spacing: 0.3px;
-                box-shadow: 0 2px 8px ${stockColor}40;
-            ">
+            <div class="stock-badge" style="background: ${stockColor}; box-shadow: 0 2px 8px ${stockColor}40;">
                 ${batchIndicator}
             </div>
         ` : ''}
@@ -1576,7 +1673,7 @@ function renderItemCard(item, resultsContainer) {
                         font-size: 24px;
                         flex-shrink:0;
                     ">
-                        $${price.toFixed(2)}
+                        KSh ${price.toFixed(2)}
                     </div>
                     ${item.batch_name ? `
                         <div style="
@@ -1604,7 +1701,7 @@ function renderItemCard(item, resultsContainer) {
                     ` : ''}
                 </div>
                 
-                <div style="
+                <div class="stock-text" style="
                     color: ${stockColor}; 
                     font-size: 14px; 
                     font-weight: 500; 
@@ -1624,7 +1721,7 @@ function renderItemCard(item, resultsContainer) {
                 </div>
                 
                 ${item.type === 'selling_unit' && item.conversion_factor ? 
-                    `<div style="
+                    `<div class="conversion-info" style="
                         font-size: 13px; 
                         color: #64748b; 
                         margin-top: 4px;
@@ -1818,9 +1915,6 @@ function closeSalesOverlay() {
 document.addEventListener("DOMContentLoaded", () => {
     console.log('⚡ Sales System Initialization');
     
-    // Initialize beep sound
-    initBeepSound();
-    
     // Check if cart-icon.js is loaded
     if (!window.cartIcon) {
         console.log('⚠️ cart-icon.js not loaded yet. Waiting...');
@@ -1870,7 +1964,9 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log('🔧 SEARCH FIX: Added local fallback search when backend is unavailable');
     console.log('👥 STAFF FIX: Proper shop ID resolution for staff logins');
     console.log('🎨 UX FIX: Results persist after tapping + Professional design');
-    console.log('🔊 AUDIO FIX: Added beep sound when tapping items');
+    console.log('🔊 AUDIO FIX: Added beep sound using Web Audio API (no file needed)');
+    console.log('💰 CURRENCY: All prices now in KSh (Kenyan Shillings)');
+    console.log('📱 RESPONSIVE: Added mobile-optimized badge positioning');
     
     console.log(`
 ╔═══════════════════════════════════════════╗
@@ -1881,6 +1977,9 @@ document.addEventListener("DOMContentLoaded", () => {
 ║ • No quantity prompts                    ║
 ║ • Integrated with cart-icon.js           ║
 ║ • Press Alt+S to open sales              ║
+║ • 💰 Currency: KSh (Kenyan Shillings)    ║
+║ • 📱 Mobile-optimized badges & cards     ║
+║ • 🔊 Audio: Web Audio API (no files)     ║
 ║ • 🚨 EMERGENCY FIX: Frontend/Backend     ║
 ║   data mismatch handling                 ║
 ║ • 🔧 SEARCH FIX: Local Firestore fallback║
@@ -1889,7 +1988,6 @@ document.addEventListener("DOMContentLoaded", () => {
 ║   for staff logins                        ║
 ║ • 🎨 UX FIX: Results persist after tapping║
 ║   & Professional modern design            ║
-║ • 🔊 AUDIO FIX: Beep sound on item tap   ║
 ╚═══════════════════════════════════════════╝
 `);
 });
