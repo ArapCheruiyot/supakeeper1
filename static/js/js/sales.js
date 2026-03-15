@@ -124,7 +124,7 @@ const NAV_HEIGHT = 64;
 })();
 
 // ====================================================
-// AUDIO HELPER FUNCTIONS - NO FILE NEEDED!
+// AUDIO HELPER FUNCTIONS - WEB AUDIO API (NO FILE NEEDED)
 // ====================================================
 
 /**
@@ -145,10 +145,10 @@ function playBeep() {
         gainNode.connect(audioContext.destination);
         
         // Configure beep sound
-        oscillator.type = 'sine';      // Smooth sine wave
-        oscillator.frequency.value = 800; // 800Hz frequency
+        oscillator.type = 'sine';
+        oscillator.frequency.value = 800;
         
-        // Volume envelope (quick fade in/out)
+        // Volume envelope (quick fade)
         gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
         
@@ -794,9 +794,6 @@ async function handleOneTap(item) {
             
         } else {
             console.log('❌ Failed to add to cart');
-            // Check why it failed
-            console.log('cartIcon object:', window.cartIcon);
-            console.log('addItem function exists:', typeof window.cartIcon.addItem === 'function');
             showNotification('Failed to add to cart / Imeshindwa kuongeza kwenye kikapu', 'error');
         }
         
@@ -804,7 +801,6 @@ async function handleOneTap(item) {
         return success;
     } else {
         console.log('❌ Cart system not loaded');
-        console.log('window.cartIcon:', window.cartIcon);
         showNotification('Cart system not ready. Please refresh. / Mfumo wa kikapu hauko tayari. Tafadhali onyesha upya.', 'error');
         console.groupEnd();
         return false;
@@ -1964,7 +1960,7 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log('🔧 SEARCH FIX: Added local fallback search when backend is unavailable');
     console.log('👥 STAFF FIX: Proper shop ID resolution for staff logins');
     console.log('🎨 UX FIX: Results persist after tapping + Professional design');
-    console.log('🔊 AUDIO FIX: Added beep sound using Web Audio API (no file needed)');
+    console.log('🔊 AUDIO FIX: Beep sound using Web Audio API (no file needed)');
     console.log('💰 CURRENCY: All prices now in KSh (Kenyan Shillings)');
     console.log('📱 RESPONSIVE: Added mobile-optimized badge positioning');
     
