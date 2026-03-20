@@ -1,0 +1,3251 @@
+/* ============================================================
+   SUPERKEEPER — APP STYLESHEET
+   Updated: photo thumbnail consistency, typography polish,
+   spacing refinement, mobile UX, safe-area support
+   ============================================================ */
+
+/* ── Custom Properties ──────────────────────────────────── */
+:root {
+  --nav-height: 60px;
+  --banner-height: 60px;
+  --stack-height: 120px;   /* nav + banner combined */
+  --item-close-offset: 72px;
+
+  /* Brand palette */
+  --indigo-600: #4f46e5;
+  --emerald-500: #10b981;
+  --slate-50:  #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-500: #64748b;
+  --slate-800: #1e293b;
+
+  /* Photo card preview heights */
+  --photo-preview-size: 150px;
+  --photo-preview-unit: 130px;
+}
+
+/* ── Reset / Base ────────────────────────────────────────── */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Inter', 'Segoe UI', Arial, Helvetica, sans-serif;
+  background-color: #f5f6fa;
+  color: #333;
+  padding-top: 0 !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+   NAVBAR
+   ============================================================ */
+.navbar {
+  position: fixed;
+  top: 0 !important;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background-color: #4285F4;
+  color: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 4000;
+  box-sizing: border-box;
+  height: var(--nav-height);
+}
+
+.nav-left #user-name { font-weight: 700; font-size: 1rem; }
+
+.nav-right button {
+  background-color: white;
+  color: #4285F4;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.875rem;
+  transition: background-color 0.2s, transform 0.15s;
+}
+
+.nav-right button:hover { background-color: #f1f1f1; transform: translateY(-1px); }
+
+/* ============================================================
+   PLAN BANNER — fixed directly below navbar
+   ============================================================ */
+#plan-banner-container {
+  position: fixed !important;
+  top: var(--nav-height) !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 3999 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: linear-gradient(135deg, #0f172a, #1e293b) !important;
+  border-bottom: 2px solid rgba(139, 92, 246, 0.4) !important;
+}
+
+#plan-banner-container > div {
+  margin: 0 !important;
+  padding: 12px 24px !important;
+  background: linear-gradient(135deg, #0f172a, #1e293b) !important;
+  border-bottom: 2px solid rgba(139, 92, 246, 0.4) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+}
+
+/* ============================================================
+   PAGE HEADER
+   ============================================================ */
+header {
+  text-align: center;
+  padding: 30px 20px;
+  margin-top: var(--stack-height);
+}
+
+header h1 {
+  font-size: 2rem;
+  margin-bottom: 8px;
+  color: #222;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+header p { font-size: 1rem; color: #555; }
+
+/* ============================================================
+   ACTION BUTTONS
+   ============================================================ */
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 30px;
+  margin: 40px 0 0;
+}
+
+.red-btn {
+  background-color: #e53935;
+  color: white;
+  font-size: 1.5rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 50%;
+  width: 140px;
+  height: 140px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(229,57,53,0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.red-btn:hover { transform: scale(1.05); box-shadow: 0 6px 16px rgba(229,57,53,0.5); }
+
+.blue-btn {
+  background-color: #1e88e5;
+  color: white;
+  font-size: 1.2rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  padding: 25px 50px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(30,136,229,0.35);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.blue-btn:hover { transform: scale(1.03); box-shadow: 0 6px 16px rgba(30,136,229,0.45); }
+
+/* ============================================================
+   STOCK OVERLAY
+   ============================================================ */
+.overlay {
+  position: fixed;
+  top: var(--stack-height);
+  left: 0;
+  width: 100%;
+  height: calc(100% - var(--stack-height));
+  background-color: rgba(0,0,0,0.5);
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  z-index: 1000;
+  pointer-events: auto;
+}
+
+.overlay.hidden { display: none !important; }
+
+.overlay-content {
+  background: white;
+  width: 100%;
+  height: 80%;
+  position: relative;
+  padding: 16px;
+  overflow-y: auto;
+  z-index: 1001;
+}
+
+.overlay-content.hidden { display: none !important; }
+
+/* ============================================================
+   QUICK ADD OVERLAY — floats below navbar+banner
+   ============================================================ */
+.quick-add-overlay {
+  position: fixed !important;
+  top: calc(var(--stack-height) + 15px) !important;  /* 135px — clears upgrade section */
+  left: 0 !important;
+  width: 100% !important;
+  height: calc(100vh - var(--stack-height) - 15px) !important;
+  background: rgba(0, 0, 0, 0.58) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 10000 !important;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  padding: 20px !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+}
+
+.quick-add-overlay.visible {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* ── Modal card ── */
+.quick-add-modal {
+  background: white !important;
+  border-radius: 24px !important;
+  width: 100% !important;
+  max-width: 600px !important;
+  max-height: calc(100vh - 135px - 40px) !important;
+  overflow-y: auto !important;
+  padding: 28px 32px !important;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.04),
+    0 8px 24px rgba(0,0,0,0.12),
+    0 24px 56px rgba(0,0,0,0.18) !important;
+  animation: modalAppear 0.3s cubic-bezier(0.34, 1.3, 0.64, 1);
+  position: relative !important;
+  scrollbar-width: thin;
+  scrollbar-color: #e2e8f0 transparent;
+}
+
+.quick-add-modal::-webkit-scrollbar { width: 4px; }
+.quick-add-modal::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 99px; }
+
+@keyframes modalAppear {
+  from { opacity: 0; transform: scale(0.97) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ============================================================
+   QUICK ADD FAB
+   ============================================================ */
+.quick-add-fab,
+#quickAddFab {
+  position: fixed !important;
+  /* Stacked bottom + safe-area-inset-bottom */
+  bottom: 28px !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 22px) !important;
+  right: 22px !important;
+  background: var(--indigo-600) !important;
+  color: white !important;
+  border: 2px solid rgba(255,255,255,0.25) !important;
+  border-radius: 60px !important;
+  padding: 14px 26px !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  box-shadow:
+    0 4px 12px rgba(79,70,229,0.4),
+    0 8px 28px rgba(79,70,229,0.3) !important;
+  cursor: pointer !important;
+  /* High enough to sit above everything */
+  z-index: 2147483647 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease !important;
+  touch-action: manipulation !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+.quick-add-fab:hover,
+#quickAddFab:hover {
+  transform: scale(1.06) translateY(-2px) !important;
+  background: #6366f1 !important;
+  box-shadow:
+    0 6px 16px rgba(79,70,229,0.5),
+    0 12px 36px rgba(79,70,229,0.4) !important;
+}
+
+.quick-add-fab:active,
+#quickAddFab:active { transform: scale(0.97) !important; }
+
+/* ============================================================
+   PHOTO SECTION — BASE UNIT CARDS
+   ============================================================
+   PROBLEM FIXED: previews were either squeezed (base unit) or
+   over-stretched (selling unit) because the container had no
+   explicit height and aspect-ratio conflicted with flex layout.
+
+   SOLUTION: Use a fixed pixel height for the preview area
+   instead of aspect-ratio, and ensure object-fit:cover always
+   fills without distortion.
+   ============================================================ */
+
+/* ============================================================
+   PHOTO GRID & CARDS — STEP 4
+   Key rules:
+   1. .qa-photo-card has NO aspect-ratio (the JS minimalStyles
+      sets aspect-ratio:1/1 which crushes buttons — we kill it).
+   2. .preview-container has a FIXED pixel height so the image
+      area is always the same size and the buttons always sit
+      below it, fully visible.
+   3. overflow:hidden is on the preview-container only, NOT the
+      card — otherwise overflow:hidden clips the action buttons
+      when the card tries to stay square.
+   ============================================================ */
+
+/* Photo grid: always 2 equal columns */
+.photo-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  margin-top: 12px !important;
+}
+
+/* Photo card shell — height driven by content, never squashed */
+.qa-photo-card {
+  aspect-ratio: unset !important;       /* kills the JS minimalStyles rule */
+  height: auto !important;
+  background: white !important;
+  border: 2px solid var(--slate-200) !important;
+  border-radius: 14px !important;
+  padding: 10px !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.18s ease !important;
+  position: relative !important;
+  overflow: visible !important;         /* do NOT clip — buttons must show */
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+
+.qa-photo-card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.1) !important;
+  border-color: #a5b4fc !important;
+}
+
+/* Preview area — fixed height, clips image only */
+.preview-container {
+  width: 100% !important;
+  height: var(--photo-preview-size) !important;
+  min-height: var(--photo-preview-size) !important;
+  max-height: var(--photo-preview-size) !important;
+  background: var(--slate-100) !important;
+  border-radius: 9px !important;
+  overflow: hidden !important;          /* image clips here, not at card level */
+  position: relative !important;
+  border: 1px solid var(--slate-200) !important;
+  flex-shrink: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Image always fills the preview box cleanly */
+.preview-container img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  display: block !important;
+  transition: transform 0.25s ease !important;
+}
+
+.preview-container img:hover { transform: scale(1.05) !important; }
+
+/* Selling-unit previews — slightly shorter */
+#sellingUnitsPhotoContainer .preview-container {
+  height: var(--photo-preview-unit) !important;
+  min-height: var(--photo-preview-unit) !important;
+  max-height: var(--photo-preview-unit) !important;
+}
+
+/* Selling units grid — same 2-col layout */
+#sellingUnitsPhotoContainer .grid,
+#sellingUnitsPhotoContainer > div > .grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+/* Action buttons — always visible, always at bottom of card */
+.qa-photo-action-btn,
+.photo-action-btn {
+  flex-shrink: 0 !important;
+  min-height: 36px !important;
+  height: 36px !important;
+  padding: 0 6px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  touch-action: manipulation !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  transition: background 0.15s ease, transform 0.15s ease !important;
+  white-space: nowrap !important;
+}
+
+/* Camera button */
+.btn-camera,
+.qa-photo-action-btn.btn-camera {
+  background: #4f46e5 !important;
+  color: white !important;
+  border: none !important;
+}
+
+.btn-camera:hover { background: #4338ca !important; transform: translateY(-1px) !important; }
+
+/* Upload button */
+.btn-upload,
+.qa-photo-action-btn.btn-upload {
+  background: white !important;
+  color: #334155 !important;
+  border: 1.5px solid #e2e8f0 !important;
+}
+
+.btn-upload:hover { background: #f8fafc !important; }
+
+/* Image count badge */
+.image-count-badge {
+  position: absolute !important;
+  top: 6px !important;
+  right: 6px !important;
+  background: rgba(0,0,0,0.55) !important;
+  color: white !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  padding: 2px 7px !important;
+  border-radius: 20px !important;
+  z-index: 10 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  pointer-events: none !important;
+}
+
+.image-count-badge.complete { background: #10b981 !important; }
+
+/* ── Photo progress summary box ── */
+#photoSummary {
+  background: #f0f9ff !important;
+  border: 1.5px solid #bae6fd !important;
+  border-radius: 16px !important;
+  padding: 16px !important;
+  margin-bottom: 16px !important;
+}
+
+/* ── Why-photo info box ── */
+.why-photo-box {
+  background: #fffbeb !important;
+  border: 1.5px solid #fde68a !important;
+  border-radius: 14px !important;
+  padding: 14px 16px !important;
+  margin-bottom: 18px !important;
+  color: #92400e !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+}
+
+/* ── Status badges ── */
+.photo-status-badge {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  padding: 3px 8px !important;
+  border-radius: 20px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+}
+
+.photo-status-badge.required,
+.photo-status-badge:not(.completed) {
+  background: #fee2e2 !important;
+  color: #ef4444 !important;
+}
+
+.photo-status-badge.completed {
+  background: #dcfce7 !important;
+  color: #10b981 !important;
+}
+
+/* ============================================================
+   SUCCESS TOAST THUMBNAILS
+   ============================================================ */
+.success-toast .success-thumbnail {
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  border: 2px solid #10b981 !important;
+  flex-shrink: 0 !important;
+}
+
+.success-toast .success-thumbnail img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+/* ============================================================
+   CATEGORIES BUTTON
+   ============================================================ */
+.categories-btn {
+  background-color: #43a047;
+  color: white;
+  font-size: 1rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  transition: transform 0.2s, box-shadow 0.2s;
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 1002;
+}
+
+.categories-btn:hover { transform: scale(1.05); box-shadow: 0 6px 12px rgba(0,0,0,0.25); }
+
+/* ============================================================
+   CATEGORIES & SUBCATEGORIES LIST
+   ============================================================ */
+.categories-list {
+  margin-top: 60px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.category-item {
+  background-color: #f1f1f1;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  transition: background-color 0.15s;
+}
+
+.category-item:hover { background-color: #e0e0e0; }
+
+.children {
+  margin-top: 6px;
+  margin-left: 25px;
+  border-left: 2px dashed #ccc;
+  padding-left: 12px;
+}
+
+.children .category-item {
+  background-color: #e8f5e9;
+  margin: 4px 0;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.item {
+  background-color: #d1c4e9;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin: 4px 0 4px 20px;
+  font-size: 0.9rem;
+  font-weight: 400;
+  display: block;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.item:hover { background-color: #b39ddb; }
+
+/* ============================================================
+   ITEM DETAIL OVERLAY
+   ============================================================ */
+.item-detail {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: #fff;
+  padding: 20px;
+  box-sizing: border-box;
+  z-index: 2100;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+.item-detail.hidden { display: none !important; }
+
+.item-detail-header {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.item-detail h3 { margin: 0; font-size: 1.5rem; color: #222; font-weight: 700; }
+.item-detail p  { margin: 6px 0; font-size: 1rem; color: #555; }
+
+/* Close X — centred across the top */
+.close-x {
+  position: absolute;
+  top: 10px; left: 40%;
+  transform: translateX(-50%);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #555;
+  cursor: pointer;
+  transition: color 0.2s, transform 0.1s;
+  z-index: 2120;
+  width: 44px; height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.95);
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.06);
+  pointer-events: auto;
+}
+
+.close-x:hover { color: #e53935; transform: translate(-50%, -1px); }
+
+/* Edit button — top right */
+.edit-btn {
+  position: absolute;
+  top: 10px; right: 10px;
+  z-index: 2110;
+  background-color: #1e88e5;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: background-color 0.2s, transform 0.1s;
+  pointer-events: auto;
+}
+
+.edit-btn:hover { background-color: #1565c0; transform: translateY(-1px); }
+
+.item-detail-header > h3 { padding-left: 6px; }
+
+/* Item images */
+.item-images { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+
+.image-slot { position: relative; display: flex; flex-direction: column; align-items: flex-start; }
+
+.image-slot img {
+  max-width: 180px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  display: block;
+  object-fit: cover;
+}
+
+.image-slot .placeholder {
+  width: 180px; height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fafafa;
+  border: 1px dashed #ddd;
+  color: #999;
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+/* Retake inside item-detail (different from overlay retake) */
+.item-detail .retake-btn {
+  position: static !important;
+  transform: none !important;
+  opacity: 1 !important;
+  margin-top: 8px;
+  background-color: #f57c00;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.875rem;
+  transition: background-color 0.2s;
+}
+
+.item-detail .retake-btn:hover { background-color: #ef6c00; }
+
+/* Prices section */
+.item-prices { margin-top: 10px; align-self: flex-start; }
+.item-prices p { margin: 4px 0; font-size: 1rem; color: #444; }
+.item-prices a { display: inline-block; margin-top: 10px; color: #1e88e5; font-weight: 700; text-decoration: none; }
+.item-prices a:hover { text-decoration: underline; }
+
+/* Editable inputs */
+#item-meta label { display: flex; flex-direction: column; font-size: 0.9rem; color: #333; font-weight: 500; }
+#item-meta input { margin-top: 6px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; width: 220px; }
+
+#upload-image-btn {
+  margin-top: 10px;
+  background-color: #43a047;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: background-color 0.2s;
+  align-self: flex-start;
+}
+
+#upload-image-btn:hover { background-color: #2e7d32; }
+
+/* ============================================================
+   TRANSACTION MODAL
+   ============================================================ */
+.modal {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background-color: rgba(0,0,0,0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 3000;
+}
+
+.modal.hidden { display: none !important; }
+
+.modal-content {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  width: 400px;
+  text-align: center;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+}
+
+#transaction-overlay .modal-content {
+  width: 520px;
+  max-height: 80%;
+  overflow-y: auto;
+  text-align: left;
+}
+
+#transaction-title { margin-bottom: 16px; font-size: 1.4rem; font-weight: 700; color: #222; }
+
+#transaction-list {
+  margin-bottom: 20px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+#transaction-list p { margin: 6px 0; font-size: 0.95rem; color: #555; }
+
+#add-transaction-btn {
+  background-color: #43a047;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: background-color 0.2s;
+}
+
+#add-transaction-btn:hover { background-color: #2e7d32; }
+
+.modal-content h3 { margin-bottom: 16px; }
+
+.modal-content button {
+  margin: 6px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  background-color: #f1f1f1;
+  transition: background-color 0.2s;
+}
+
+.modal-content button:hover { background-color: #e0e0e0; }
+
+.danger-btn { background-color: #e53935; color: white; }
+.danger-btn:hover { background-color: #c62828; }
+
+/* ============================================================
+   UTILITIES
+   ============================================================ */
+.hidden { display: none !important; }
+.object-cover { object-fit: cover !important; }
+.aspect-square { aspect-ratio: 1 / 1 !important; }
+
+/* Loading skeleton shimmer */
+.image-loading {
+  position: relative;
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ============================================================
+   RESPONSIVE — TABLET  (≤ 768px)
+   ============================================================ */
+@media (max-width: 768px) {
+
+  :root {
+    --nav-height: 50px;
+    --banner-height: 52px;
+    --stack-height: 102px;
+    --photo-preview-size: 140px;
+    --photo-preview-unit: 120px;
+  }
+
+  .navbar { height: var(--nav-height); padding: 0 16px; }
+
+  #plan-banner-container { top: var(--nav-height) !important; }
+  #plan-banner-container > div { padding: 10px 16px !important; }
+
+  header { margin-top: var(--stack-height); }
+
+  .overlay {
+    top: var(--stack-height);
+    height: calc(100% - var(--stack-height));
+  }
+
+  .quick-add-overlay {
+    top: calc(var(--stack-height) + 15px) !important;
+    height: calc(100vh - var(--stack-height) - 15px) !important;
+  }
+
+  .quick-add-modal {
+    max-height: calc(100vh - var(--stack-height) - 15px - 40px) !important;
+  }
+
+  .quick-add-fab,
+  #quickAddFab {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 18px) !important;
+    right: 18px !important;
+    padding: 13px 22px !important;
+    font-size: 14px !important;
+  }
+
+  /* On tablets, keep 2-col for base unit, 1-col for selling units
+     so selling-unit cards don't become tiny side-by-side         */
+  #sellingUnitsPhotoContainer .grid,
+  #sellingUnitsPhotoContainer > div > .grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* ============================================================
+   RESPONSIVE — MOBILE  (≤ 480px)
+   ============================================================ */
+@media (max-width: 480px) {
+
+  :root {
+    --nav-height: 45px;
+    --banner-height: 48px;
+    --stack-height: 93px;
+    --photo-preview-size: 130px;
+    --photo-preview-unit: 112px;
+    --item-close-offset: 48px;
+  }
+
+  .navbar { height: var(--nav-height); }
+
+  #plan-banner-container { top: var(--nav-height) !important; }
+  #plan-banner-container > div { padding: 8px 12px !important; }
+
+  header { margin-top: var(--stack-height); }
+
+  .overlay {
+    top: var(--stack-height);
+    height: calc(100% - var(--stack-height));
+  }
+
+  .quick-add-overlay {
+    top: calc(var(--stack-height) + 12px) !important;
+    height: calc(100vh - var(--stack-height) - 12px) !important;
+    padding: 10px !important;
+  }
+
+  .quick-add-modal {
+    padding: 20px 16px !important;
+    max-height: calc(100vh - var(--stack-height) - 12px - 20px) !important;
+    border-radius: 22px 22px 0 0 !important; /* bottom-sheet feel */
+  }
+
+  .quick-add-fab,
+  #quickAddFab {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 14px) !important;
+    right: 14px !important;
+    padding: 12px 18px !important;
+    font-size: 13px !important;
+    border-radius: 50px !important;
+  }
+
+  /* Keep 2-col photo grid on small phones too — single col is wasteful */
+  .photo-grid,
+  #sellingUnitsPhotoContainer .grid,
+  #sellingUnitsPhotoContainer > div > .grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .qa-photo-card { padding: 8px !important; }
+  .qa-photo-action-btn,
+  .photo-action-btn { font-size: 11px !important; padding: 7px 4px !important; }
+
+  /* Item detail */
+  .item-detail { padding: 12px; }
+  .close-x { width: 36px; height: 36px; font-size: 1.1rem; top: 8px; left: 50%; transform: translateX(-50%); }
+  .edit-btn { right: 8px; top: 8px; padding: 5px 8px; font-size: 14px; }
+  #item-meta input { width: 160px; }
+}
+
+/* ============================================================
+   EXTRA SMALL  (≤ 360px)
+   ============================================================ */
+@media (max-width: 360px) {
+
+  :root {
+    --photo-preview-size: 120px;
+    --photo-preview-unit: 100px;
+  }
+
+  .quick-add-overlay { padding: 8px !important; }
+
+  .quick-add-fab,
+  #quickAddFab {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px) !important;
+    right: 10px !important;
+    padding: 11px 15px !important;
+    font-size: 12px !important;
+  }
+
+  .qa-photo-card { padding: 6px !important; }
+  .qa-photo-action-btn,
+  .photo-action-btn { padding: 6px 3px !important; font-size: 10px !important; }
+}
+
+/* ============================================================
+   SAFE-AREA / NOTCH SUPPORT  (env() aware browsers)
+   ============================================================ */
+@supports (padding: max(0px)) {
+
+  @media (max-width: 768px) {
+    header { margin-top: max(var(--stack-height), env(safe-area-inset-top) + var(--stack-height)); }
+    .overlay { top: max(var(--stack-height), env(safe-area-inset-top) + var(--stack-height)); }
+    .quick-add-overlay { top: max(calc(var(--stack-height) + 15px), env(safe-area-inset-top) + calc(var(--stack-height) + 15px)) !important; }
+  }
+
+  @media (max-width: 480px) {
+    header { margin-top: max(var(--stack-height), env(safe-area-inset-top) + var(--stack-height)); }
+    .overlay { top: max(var(--stack-height), env(safe-area-inset-top) + var(--stack-height)); }
+    .quick-add-overlay { top: max(calc(var(--stack-height) + 12px), env(safe-area-inset-top) + calc(var(--stack-height) + 12px)) !important; }
+  }
+}
+
+/* ============================================================
+   OVERRIDE GUARD — ensures nothing un-fixes the stack order
+   ============================================================ */
+.navbar            { top: 0 !important; }
+#plan-banner-container { top: var(--nav-height) !important; }// quick-add-overlay.js - Complete Smart Quick Add Component
+// ENHANCED: Bilingual support, Mobile gestures, Auto-save, Social proof, Performance optimized
+// UPDATED: Added header buttons (Quick Add + Categories) and hidden FAB
+
+import { db } from './firebase-config.js';
+import { 
+  collection, 
+  query, 
+  getDocs, 
+  addDoc,
+  where,
+  limit,
+  orderBy,
+  doc,
+  getDoc
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+// Cloudinary configuration
+const CLOUDINARY_CLOUD = "decckqobb";
+const CLOUDINARY_UPLOAD_PRESET = "Superkeeper";
+const FLASK_BACKEND_URL = window.location.origin;
+
+(function() {
+
+  // ============================================
+  // 1. INJECT TAILWIND CDN (if not already present)
+  // ============================================
+  if (!document.querySelector('script[src*="tailwindcss"]') && !document.querySelector('link[href*="tailwind"]')) {
+    const tw = document.createElement('script');
+    tw.src = 'https://cdn.tailwindcss.com';
+    document.head.appendChild(tw);
+  }
+
+  // ============================================
+  // 2. INJECT MINIMAL CUSTOM CSS (with header button styles)
+  // ============================================
+  const minimalStyles = document.createElement('style');
+  minimalStyles.textContent = `
+    @keyframes modalAppear {
+      from { opacity: 0; transform: scale(0.98) translateY(8px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes qaFadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .qa-modal-enter { animation: modalAppear 0.3s cubic-bezier(0.34,1.3,0.64,1) both; }
+    .qa-slide-down  { animation: slideDown 0.22s ease both; }
+    .qa-fade-in     { animation: qaFadeIn 0.15s ease both; }
+    .qa-spin        { animation: spin 0.85s linear infinite; }
+
+    /* Overlay visibility */
+    .quick-add-overlay {
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.25s ease, visibility 0.25s ease;
+    }
+    .quick-add-overlay.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    /* Thin scrollbar */
+    .qa-scroll::-webkit-scrollbar { width: 5px; }
+    .qa-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 99px; }
+
+    /* Step context icon */
+    .qa-ctx-icon {
+      display: flex; align-items: center; justify-content: center;
+      width: 36px; height: 36px; border-radius: 50%;
+      background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      font-size: 18px; flex-shrink: 0;
+    }
+
+    /* Hint text */
+    .qa-hint {
+      font-size: 13px; color: #64748b; margin-top: 6px;
+      line-height: 1.5; padding-left: 10px;
+      border-left: 3px solid #e2e8f0;
+    }
+
+    /* Input focus */
+    .qa-input:focus {
+      outline: none;
+      border-color: #4f46e5;
+      box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+    }
+
+    /* Photo card */
+    .qa-photo-card {
+      transition: all 0.3s cubic-bezier(0.34, 1.3, 0.64, 1);
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      aspect-ratio: 1 / 1;
+      width: 100%;
+      border-radius: 16px;
+      padding: 12px;
+    }
+    
+    .qa-photo-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+      border-color: #a5b4fc;
+    }
+
+    /* Preview container - square */
+    .preview-container {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      background: #f1f5f9;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid #e2e8f0;
+    }
+
+    .preview-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.3s ease;
+      cursor: zoom-in;
+    }
+
+    .preview-container img:hover {
+      transform: scale(1.1);
+    }
+
+    /* Choice card */
+    .qa-choice:hover {
+      border-color: #a5b4fc;
+      transform: translateY(-3px);
+      box-shadow: 0 8px 20px rgba(79,70,229,0.12);
+    }
+    .qa-choice.selected {
+      border-color: #4f46e5 !important;
+      background: #f5f3ff !important;
+      box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+    }
+
+    /* Example chip */
+    .qa-chip:hover {
+      background: #4f46e5 !important;
+      color: white !important;
+      border-color: #4f46e5 !important;
+      transform: translateY(-1px);
+    }
+
+    /* Category item */
+    .qa-cat-item:hover { background: #f8fafc; }
+    .qa-cat-item.highlight { background: #f5f3ff; border-left: 3px solid #4f46e5; }
+
+    /* Buttons */
+    .qa-btn-primary:hover  { background: #4338ca !important; transform: translateY(-1px); }
+    .qa-btn-secondary:hover { background: #f8fafc !important; }
+    .qa-btn-success:hover  { background: #059669 !important; transform: translateY(-1px); }
+    .qa-btn-success:disabled { background: #e2e8f0 !important; color: #94a3b8 !important; cursor: not-allowed; transform: none !important; }
+
+    /* Close button */
+    .qa-close:hover { background: #fee2e2; color: #ef4444; transform: rotate(90deg); }
+
+    /* Remove btn */
+    .qa-remove:hover { background: #fee2e2; }
+
+    /* Add unit btn */
+    .qa-add-unit:hover { background: #dcfce7; }
+
+    /* Create option */
+    .qa-create:hover { background: #dcfce7; transform: translateY(-1px); }
+
+    /* Back-to-matches link */
+    .qa-back-link:hover { opacity: 0.7; }
+
+    /* Dialog btns */
+    .qa-dlg-cancel:hover { background: #e2e8f0; }
+    .qa-dlg-confirm:hover { background: #4338ca; transform: translateY(-1px); }
+    .qa-dlg-green:hover { background: #059669; }
+    .qa-dlg-red:hover { background: #dc2626; }
+
+    /* Smart suggestion banner */
+    #smartSuggestionBanner { animation: qaFadeIn 0.2s ease; }
+
+    /* Selling unit item */
+    .qa-unit-item:hover { background: #f8fafc; border-color: #a5b4fc; }
+
+    /* Preview image */
+    .qa-preview img:hover { transform: scale(1.04); }
+
+    /* Step num transition */
+    .qa-step-num { transition: background 0.3s ease, color 0.3s ease, box-shadow 0.3s ease; }
+
+    /* Image count badge */
+    .image-count-badge {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 20px;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .image-count-badge.complete {
+      background: #10b981;
+    }
+
+    /* Retake button */
+    .retake-btn {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100%);
+      background: #4f46e5;
+      color: white;
+      border: none;
+      border-radius: 20px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      opacity: 0;
+      z-index: 3;
+      white-space: nowrap;
+    }
+
+    .qa-photo-card:hover .retake-btn {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* ===== NEW HEADER BUTTON STYLES ===== */
+    .action-buttons-header {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      padding: 0 0 16px 0;
+      margin-bottom: 16px;
+      border-bottom: 1px solid #e2e8f0;
+      position: sticky;
+      top: 0;
+      background: white;
+      z-index: 10;
+    }
+
+    /* Quick Add Header Button - Purple (first) */
+    #quickAddHeaderBtn {
+      background: #4f46e5;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 8px rgba(79, 70, 229, 0.2);
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 140px;
+      justify-content: center;
+    }
+
+    #quickAddHeaderBtn:hover {
+      background: #4338ca;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(79, 70, 229, 0.3);
+    }
+
+    #quickAddHeaderBtn:active {
+      transform: translateY(0);
+    }
+
+    /* Categories Header Button - Green (second) */
+    #categoriesHeaderBtn {
+      background: #10b981;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 8px rgba(16, 185, 129, 0.2);
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 140px;
+      justify-content: center;
+    }
+
+    #categoriesHeaderBtn:hover {
+      background: #059669;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(16, 185, 129, 0.3);
+    }
+
+    #categoriesHeaderBtn:active {
+      transform: translateY(0);
+    }
+
+    /* Hide the old FAB button */
+    #quickAddFab {
+      display: none !important;
+    }
+
+    /* Hide the old categories button if it exists elsewhere */
+    .categories-btn {
+      display: none !important;
+    }
+
+    /* Mobile responsive */
+    @media (max-width: 640px) {
+      .action-buttons-header {
+        flex-direction: column;
+        gap: 8px;
+      }
+      
+      #quickAddHeaderBtn,
+      #categoriesHeaderBtn {
+        width: 100%;
+        min-width: auto;
+      }
+    }
+
+    /* Touch targets */
+    @media (hover: none) and (pointer: coarse) {
+      .qa-btn-primary, .qa-btn-secondary, .qa-btn-success,
+      .qa-chip, .qa-choice, .qa-photo-action-btn,
+      .qa-add-unit, .qa-create, .qa-cat-item, .qa-remove,
+      #quickAddHeaderBtn, #categoriesHeaderBtn {
+        min-height: 48px;
+      }
+      .qa-input { font-size: 16px !important; padding: 16px !important; }
+    }
+
+    /* Mobile stacking */
+    @media (max-width: 480px) {
+      .qa-step-lbl { display: none !important; }
+      .qa-choice-row { flex-direction: column !important; }
+      .qa-or-div { display: none !important; }
+      .qa-action-row { flex-direction: column-reverse !important; }
+      .qa-action-row .qa-btn-primary,
+      .qa-action-row .qa-btn-secondary,
+      .qa-action-row .qa-btn-success { width: 100%; justify-content: center; }
+      .qa-stock-btns { flex-direction: column !important; }
+      .photo-grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
+  `;
+  document.head.appendChild(minimalStyles);
+
+  // ============================================
+  // 3. HTML STRUCTURE — Complete overlay HTML with header buttons
+  // ============================================
+  const overlayHTML = `
+
+    <!-- ═══════════════════════════════════════
+         FLOATING ACTION BUTTON (HIDDEN)
+         ═══════════════════════════════════════ -->
+    <button id="quickAddFab"
+      class="fixed bottom-7 right-7 z-[9999] flex items-center gap-2
+             bg-indigo-600 text-white font-bold rounded-full
+             px-6 py-3.5 text-sm
+             shadow-lg shadow-indigo-500/40
+             transition-all duration-200 hover:bg-indigo-700 hover:scale-105 active:scale-95"
+      style="display: none !important;">
+      <span>➕ Quick Add Item</span>
+    </button>
+
+    <!-- ═══════════════════════════════════════
+         STEP 1 — ITEM DETAILS (with header buttons)
+         ═══════════════════════════════════════ -->
+    <div class="quick-add-overlay fixed inset-0 z-[10000] flex items-center justify-center p-6
+                bg-slate-900/55 backdrop-blur-sm"
+         id="step1Overlay">
+      <div class="qa-scroll qa-modal-enter bg-white rounded-2xl w-full max-w-[540px]
+                  max-h-[calc(100vh-80px)] overflow-y-auto
+                  px-8 py-7
+                  shadow-2xl ring-1 ring-black/5">
+
+        <!-- ===== NEW HEADER WITH BUTTONS (Quick Add first, then Categories) ===== -->
+        <div class="action-buttons-header">
+          <!-- Quick Add Button - Now first! -->
+          <button id="quickAddHeaderBtn">
+            <span>➕</span> Quick Add Item
+          </button>
+          
+          <!-- Categories Button - Second -->
+          <button id="categoriesHeaderBtn">
+            <span>📁</span> Categories
+          </button>
+        </div>
+
+        <!-- Original Header -->
+        <div class="flex justify-between items-start gap-3 mb-5">
+          <div>
+            <h2 class="text-lg font-bold text-slate-800 leading-snug">➕ Add Item — Step 1 of 4</h2>
+            <p class="text-sm text-slate-400 mt-0.5">➕ Ongeza Bidhaa — Hatua 1 kati ya 4</p>
+          </div>
+          <button id="step1Close"
+            class="qa-close flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center
+                   text-slate-400 bg-slate-50 border border-slate-200
+                   text-lg cursor-pointer transition-all duration-200">✕</button>
+        </div>
+
+        <!-- Step Indicator -->
+        <div class="flex items-center justify-center gap-1 mb-5 px-3 py-3
+                    bg-slate-50 border border-slate-200 rounded-2xl">
+          <div class="flex flex-col items-center gap-1 min-w-[52px]">
+            <span class="qa-step-num w-8 h-8 rounded-full bg-indigo-600 text-white text-xs font-bold
+                         flex items-center justify-center shadow-[0_0_0_4px_rgba(79,70,229,0.15)]">1</span>
+            <span class="qa-step-lbl text-[10px] font-semibold uppercase tracking-wide text-indigo-600">Item</span>
+          </div>
+          <span class="text-slate-300 text-base pb-4 mx-0.5">›</span>
+          <div class="flex flex-col items-center gap-1 min-w-[52px] opacity-40">
+            <span class="qa-step-num w-8 h-8 rounded-full bg-slate-200 text-slate-400 text-xs font-bold flex items-center justify-center">2</span>
+            <span class="qa-step-lbl text-[10px] font-semibold uppercase tracking-wide text-slate-400">Category</span>
+          </div>
+          <span class="text-slate-300 text-base pb-4 mx-0.5">›</span>
+          <div class="flex flex-col items-center gap-1 min-w-[52px] opacity-40">
+            <span class="qa-step-num w-8 h-8 rounded-full bg-slate-200 text-slate-400 text-xs font-bold flex items-center justify-center">3</span>
+            <span class="qa-step-lbl text-[10px] font-semibold uppercase tracking-wide text-slate-400">Units</span>
+          </div>
+          <span class="text-slate-300 text-base pb-4 mx-0.5">›</span>
+          <div class="flex flex-col items-center gap-1 min-w-[52px] opacity-40">
+            <span class="qa-step-num w-8 h-8 rounded-full bg-slate-200 text-slate-400 text-xs font-bold flex items-center justify-center">4</span>
+            <span class="qa-step-lbl text-[10px] font-semibold uppercase tracking-wide text-slate-400">Photos</span>
+          </div>
+        </div>
+
+        <!-- Step badge -->
+        <span class="inline-flex items-center gap-1.5 bg-indigo-100 text-indigo-700
+                     text-[11px] font-bold uppercase tracking-widest
+                     px-3 py-1.5 rounded-full mb-3.5">
+          📦 STEP 1 OF 4 — ITEM DETAILS / MAELEZO YA BIDHAA
+        </span>
+
+        <!-- Context box -->
+        <div class="flex items-start gap-3 bg-emerald-50 border border-emerald-200
+                    rounded-xl px-4 py-3 mb-6 text-sm text-emerald-800 leading-relaxed">
+          <span class="qa-ctx-icon">💡</span>
+          <span>Tell us what you're adding and how it arrives from your supplier. This helps us track your stock correctly.</span>
+        </div>
+
+        <!-- Item name -->
+        <div class="mb-5">
+          <label class="block mb-2">
+            <span class="text-[15px] font-bold text-slate-800">What item are you adding?</span>
+            <span class="text-xs font-normal text-slate-400 ml-1">/ Unaongeza bidhaa gani?</span>
+            <span class="text-red-500 font-bold ml-0.5">*</span>
+          </label>
+          <div class="relative flex items-center">
+            <input id="itemNameInput" type="text" autocomplete="off"
+              placeholder="e.g., Mea Fertilizer, Kibuyu bar soap, Omo"
+              class="qa-input w-full px-4 py-3 pr-10 border-2 border-slate-200 rounded-xl
+                     text-[15px] text-slate-800 bg-white transition-colors duration-200">
+            <span id="nameStatus" class="absolute right-3 text-base pointer-events-none"></span>
+          </div>
+          <p class="text-xs text-slate-400 italic mt-1.5">💡 <em>Used to search for this item during sales and stock management.</em></p>
+        </div>
+
+        <!-- Arrival unit -->
+        <div class="mb-5">
+          <label class="block mb-2">
+            <span class="text-[15px] font-bold text-slate-800">How does it arrive from supplier?</span>
+            <span class="text-xs font-normal text-slate-400 ml-1">/ Inakujaje kutoka kwa msambazaji?</span>
+            <span class="text-red-500 font-bold ml-0.5">*</span>
+          </label>
+          <div class="relative flex items-center">
+            <input id="arrivalUnitInput" type="text"
+              placeholder="e.g., 50kg bag, carton of 24, 20L jerrycan"
+              class="qa-input w-full px-4 py-3 pr-10 border-2 border-slate-200 rounded-xl
+                     text-[15px] text-slate-800 bg-white transition-colors duration-200">
+            <span id="arrivalStatus" class="absolute right-3 text-base pointer-events-none"></span>
+          </div>
+          <p class="qa-hint">Include both quantity and unit — e.g. <strong>50kg bag</strong>, <strong>carton of 24</strong>, <strong>20L jerrycan</strong></p>
+          <p class="text-xs text-slate-400 italic mt-1.5">💡 <em>This is your base unit for stock counting. Each delivery from supplier counts as one of these.</em></p>
+        </div>
+
+        <!-- Example chips -->
+        <div class="bg-slate-50 rounded-2xl p-4 my-5 border border-slate-200">
+          <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">📋 Common examples:</p>
+          <div class="flex flex-wrap gap-2">
+            <span class="qa-chip example-chip bg-white border border-slate-200 rounded-full px-3 py-1.5 text-[13px] text-slate-700 font-medium cursor-pointer transition-all duration-200" data-example="50kg bag">Fertilizer - 50kg bag</span>
+            <span class="qa-chip example-chip bg-white border border-slate-200 rounded-full px-3 py-1.5 text-[13px] text-slate-700 font-medium cursor-pointer transition-all duration-200" data-example="20L carton">Cooking oil - 20L carton</span>
+            <span class="qa-chip example-chip bg-white border border-slate-200 rounded-full px-3 py-1.5 text-[13px] text-slate-700 font-medium cursor-pointer transition-all duration-200" data-example="carton of 24">Soap - carton of 24</span>
+            <span class="qa-chip example-chip bg-white border border-slate-200 rounded-full px-3 py-1.5 text-[13px] text-slate-700 font-medium cursor-pointer transition-all duration-200" data-example="25kg bag">Sugar - 25kg bag</span>
+            <span class="qa-chip example-chip bg-white border border-slate-200 rounded-full px-3 py-1.5 text-[13px] text-slate-700 font-medium cursor-pointer transition-all duration-200" data-example="1L bottle">Soda - 1L bottle</span>
+            <span class="qa-chip example-chip bg-white border border-slate-200 rounded-full px-3 py-1.5 text-[13px] text-slate-700 font-medium cursor-pointer transition-all duration-200" data-example="10kg tin">Cooking fat - 10kg tin</span>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="qa-action-row flex gap-2.5 justify-end pt-4 mt-6 border-t border-slate-100">
+          <button id="step1Cancel"
+            class="qa-btn-secondary flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm
+                   text-slate-600 bg-white border-2 border-slate-200 cursor-pointer transition-all duration-150 min-h-[44px]">
+            Cancel / Ghairi
+          </button>
+          <button id="step1Continue"
+            class="qa-btn-primary flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm
+                   text-white bg-indigo-600 cursor-pointer transition-all duration-150 min-h-[44px]
+                   shadow-md shadow-indigo-500/25">
+            Continue → Category / Endelea → Aina
+          </button>
+        </div>
+
+      </div>
+    </div><!-- /step1Overlay -->
+
+    <!-- STEP 2, 3, 4 remain exactly the same as before -->
+    <!-- ... (keep all your existing step 2, 3, 4 HTML) ... -->
+  `;
+
+  // Inject HTML immediately
+  document.body.insertAdjacentHTML('beforeend', overlayHTML);
+
+  // ============================================
+  // 4. MAIN INIT FUNCTION (with header button handlers)
+  // ============================================
+  
+  function initQuickAdd() {
+    console.log('🚀 Initializing Quick Add...');
+    
+    // Get all DOM elements
+    const fab = document.getElementById('quickAddFab');
+    
+    // Check if critical elements exist
+    if (!fab) {
+      console.warn('Quick Add: Elements not ready, retrying in 100ms...');
+      setTimeout(initQuickAdd, 100);
+      return;
+    }
+
+    // Get all other DOM elements
+    const step1Overlay = document.getElementById('step1Overlay');
+    const step1Close = document.getElementById('step1Close');
+    const step1Cancel = document.getElementById('step1Cancel');
+    const step1Continue = document.getElementById('step1Continue');
+    const itemNameInput = document.getElementById('itemNameInput');
+    const arrivalUnitInput = document.getElementById('arrivalUnitInput');
+    const exampleChips = document.querySelectorAll('.example-chip');
+
+    const step2Overlay = document.getElementById('step2Overlay');
+    const step2Close = document.getElementById('step2Close');
+    const step2Back = document.getElementById('step2Back');
+    const summaryItemName = document.getElementById('summaryItemName');
+    const summaryArrivalUnit = document.getElementById('summaryArrivalUnit');
+    const categoryFilter = document.getElementById('categoryFilter');
+    const loadingBarFill = document.getElementById('loadingBarFill');
+    const loadingProgress = document.getElementById('loadingProgress');
+
+    const step3Overlay = document.getElementById('step3Overlay');
+    const step3Close = document.getElementById('step3Close');
+    const step3Back = document.getElementById('step3Back');
+    const step3Continue = document.getElementById('step3Continue');
+    const finalItemName = document.getElementById('finalItemName');
+    const finalCategoryPath = document.getElementById('finalCategoryPath');
+    const finalArrivalUnit = document.getElementById('finalArrivalUnit');
+
+    const step4Overlay = document.getElementById('step4Overlay');
+    const step4Close = document.getElementById('step4Close');
+    const step4Back = document.getElementById('step4Back');
+    const step4Finish = document.getElementById('step4Finish');
+    const photoItemName = document.getElementById('photoItemName');
+    const photoArrivalUnit = document.getElementById('photoArrivalUnit');
+    const baseUnitDisplayPhoto = document.getElementById('baseUnitDisplay_photo');
+    const frontPreview = document.getElementById('frontPreview');
+    const backPreview = document.getElementById('backPreview');
+    const frontCard = document.getElementById('frontCard');
+    const backCard = document.getElementById('backCard');
+    const frontStatus = document.getElementById('frontStatus');
+    const backStatus = document.getElementById('backStatus');
+    const captureFrontBtn = document.getElementById('captureFrontBtn');
+    const uploadFrontBtn = document.getElementById('uploadFrontBtn');
+    const captureBackBtn = document.getElementById('captureBackBtn');
+    const uploadBackBtn = document.getElementById('uploadBackBtn');
+    const mainPhotoStatus = document.getElementById('mainPhotoStatus');
+    const sellingUnitsPhotoContainer = document.getElementById('sellingUnitsPhotoContainer');
+    const sellingUnitsPhotoSummary = document.getElementById('sellingUnitsPhotoSummary');
+
+    // ===== NEW: Get header buttons =====
+    const quickAddHeaderBtn = document.getElementById('quickAddHeaderBtn');
+    const categoriesHeaderBtn = document.getElementById('categoriesHeaderBtn');
+
+    console.log('✅ Quick Add elements found, initializing...');
+
+    // ============================================
+    // State variables
+    // ============================================
+    let shopId = localStorage.getItem('activeShopId');
+    let allCategories = [];
+    let bestMatchCategories = [];
+    let selectedCategory = null;
+    let sellingUnits = [];
+    let currentItem = { name: '', arrivalUnit: '' };
+    let addInitialStock = false;
+    let initialStockData = { quantity: 0, buyPrice: 0, sellPrice: 0 };
+    let sellingUnitPrices = {};
+    let itemImages = { front: null, back: null };
+    let sellingUnitImages = {};
+    let _smartSuggestionApplied = false;
+
+    const categoryItemsCache = {};
+    let _preloadPromise = null;
+
+    // ============================================
+    // Smart defaults
+    // ============================================
+    const SMART_DEFAULTS = [
+      { keywords: ['fertilizer', 'fertiliser', 'mea', 'dap', 'can', 'urea', 'npk', 'lime', 'sulphate'], arrival: '50kg bag', unit: '1kg pack', qty: 50 },
+      { keywords: ['sugar', 'sukari'], arrival: '50kg bag', unit: '1kg pack', qty: 50 },
+      { keywords: ['maize', 'unga', 'flour', 'wheat', 'rice', 'mchele'], arrival: '90kg bag', unit: '1kg pack', qty: 90 },
+      { keywords: ['soap', 'sabuni', 'detergent', 'omo', 'aerial', 'ariel', 'sunlight'], arrival: 'carton of 24', unit: 'single bar', qty: 24 },
+      { keywords: ['oil', 'mafuta', 'cooking'], arrival: '20L carton', unit: '1L bottle', qty: 20 },
+      { keywords: ['soda', 'juice', 'water', 'maji', 'beverage', 'drink', 'cola', 'fanta'], arrival: 'case of 24', unit: '1 bottle', qty: 24 },
+      { keywords: ['milk', 'maziwa'], arrival: '10L can', unit: '500ml packet', qty: 20 },
+      { keywords: ['bread', 'mkate'], arrival: 'tray of 10', unit: 'single loaf', qty: 10 },
+      { keywords: ['chicken', 'feed', 'mash', 'kienyeji'], arrival: '50kg bag', unit: '1kg pack', qty: 50 },
+      { keywords: ['pesticide', 'herbicide', 'fungicide', 'dawa'], arrival: '20L jerrycan', unit: '1L bottle', qty: 20 },
+    ];
+
+    // ============================================
+    // Helper functions (keep all your existing helper functions)
+    // ============================================
+
+    async function preloadAllData() {
+      if (_preloadPromise) return _preloadPromise;
+      _preloadPromise = (async () => {
+        if (!shopId) { console.warn('Quick Add: No shopId'); return; }
+        const t0 = Date.now();
+        const categoriesSnap = await getDocs(collection(db, 'Shops', shopId, 'categories'));
+        const rawCategories = [];
+        categoriesSnap.forEach(docSnap => {
+          const d = docSnap.data();
+          rawCategories.push({ id: docSnap.id, name: d.name || '', parentId: d.parentId || null, fullPath: d.name || '', itemCount: 0, subcatCount: 0, status: 'empty' });
+        });
+        await Promise.all(rawCategories.map(async cat => {
+          try {
+            const itemsSnap = await getDocs(collection(db, 'Shops', shopId, 'categories', cat.id, 'items'));
+            const names = [];
+            itemsSnap.forEach(d => { const n = d.data().name; if (n) names.push({ name: n }); });
+            categoryItemsCache[cat.id] = names;
+            cat.itemCount = names.length;
+          } catch (e) { categoryItemsCache[cat.id] = []; }
+        }));
+        const catMap = {};
+        rawCategories.forEach(c => { catMap[c.id] = c; });
+        rawCategories.forEach(c => { if (c.parentId && catMap[c.parentId]) catMap[c.parentId].subcatCount += 1; });
+        function resolvePath(cat) {
+          if (!cat.parentId || !catMap[cat.parentId]) return cat.name;
+          return resolvePath(catMap[cat.parentId]) + ' → ' + cat.name;
+        }
+        rawCategories.forEach(c => {
+          c.fullPath = resolvePath(c);
+          c.status = c.itemCount > 0 ? 'leaf' : (c.subcatCount > 0 ? 'container' : 'empty');
+        });
+        allCategories = rawCategories;
+        console.log(`✅ Quick Add: preloaded ${allCategories.length} categories in ${Date.now() - t0}ms`);
+      })();
+      return _preloadPromise;
+    }
+
+    preloadAllData().catch(err => console.warn('Quick Add: preload error:', err));
+
+    function scoreCategories(itemName) {
+      const raw = itemName.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+      const terms = [...new Set([...raw, ...raw.map(t => t.endsWith('s') ? t.slice(0,-1) : t+'s'), ...raw.filter(t=>t.length>4).map(t=>t.substring(0,4))])];
+      const results = [];
+      for (const cat of allCategories) {
+        let score = 0;
+        const nameLower = cat.name.toLowerCase();
+        const pathLower = cat.fullPath.toLowerCase();
+        const matchingItems = [];
+        for (const term of terms) {
+          if (nameLower === term) score += 100;
+          else if (nameLower.includes(term)) score += 60;
+          else if (pathLower.includes(term)) score += 40;
+        }
+        const cached = categoryItemsCache[cat.id] || [];
+        for (const item of cached) {
+          const il = item.name.toLowerCase();
+          for (const term of terms) {
+            if (il.includes(term)) {
+              score += 15;
+              if (matchingItems.length < 3 && !matchingItems.includes(item.name)) matchingItems.push(item.name);
+              break;
+            }
+          }
+        }
+        if (cat.subcatCount > 0) score += 5;
+        if (score > 0) results.push({ ...cat, score, matchingItems });
+      }
+      return results.sort((a, b) => b.score - a.score);
+    }
+
+    function applySmartDefaults(name) {
+      if (!name || _smartSuggestionApplied) return;
+      const lower = name.toLowerCase();
+      for (const rule of SMART_DEFAULTS) {
+        if (rule.keywords.some(k => lower.includes(k))) {
+          if (!arrivalUnitInput.value) { 
+            arrivalUnitInput.value = rule.arrival; 
+            arrivalUnitInput.style.borderColor = '#10b981'; 
+            showSmartSuggestionToast(rule); 
+          }
+          _smartSuggestionApplied = true; 
+          break;
+        }
+      }
+    }
+
+    function showSmartSuggestionToast(rule) {
+      const existing = document.getElementById('smartSuggestionBanner');
+      if (existing) existing.remove();
+      const banner = document.createElement('div');
+      banner.id = 'smartSuggestionBanner';
+      banner.className = 'flex items-center gap-2 bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-3 my-2 text-sm text-emerald-800';
+      banner.innerHTML = `<span>✨</span><span>Smart suggestion applied — arrival unit set to <strong>${rule.arrival}</strong>. Change if needed.</span><span class="ml-auto cursor-pointer text-slate-400 text-base leading-none" id="dismissSmart">✕</span>`;
+      arrivalUnitInput.parentElement.parentElement.insertAdjacentElement('afterend', banner);
+      banner.querySelector('#dismissSmart').onclick = () => banner.remove();
+      setTimeout(() => { if (banner.parentNode) banner.remove(); }, 5000);
+    }
+
+    // ============================================
+    // STEP 3 SELLING UNIT PRICE FUNCTIONS
+    // ============================================
+
+    function calculateSellingUnitPrices(baseSellPrice) {
+      const suggestions = {};
+      sellingUnits.forEach((unit, index) => {
+        const suggested = Math.round((baseSellPrice / unit.quantityPerUnit) * 100) / 100;
+        suggestions[index] = { suggested, actual: suggested };
+      });
+      return suggestions;
+    }
+
+    function renderSellingUnitPrices(baseSellPrice) {
+      if (!sellingUnitPricesSection || !sellingUnitPricesList) return;
+      
+      if (sellingUnits.length === 0) { 
+        sellingUnitPricesSection.classList.add('hidden'); 
+        return; 
+      }
+      
+      const suggestions = calculateSellingUnitPrices(baseSellPrice);
+      sellingUnitPrices = suggestions;
+      
+      const buyPrice = parseFloat(buyPriceInput?.value) || 0;
+      
+      let html = `<div class="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-3.5 text-sm text-blue-800">
+        <strong>📊 Price breakdown for 1 ${currentItem.arrivalUnit}:</strong><br>
+        ${buyPrice > 0 ? `Cost: <strong>KSh ${buyPrice}</strong> &nbsp;|&nbsp; ` : ''}
+        Selling: <strong>KSh ${baseSellPrice}</strong>
+        ${buyPrice > 0 ? `&nbsp;|&nbsp; Margin: <strong style="color:${baseSellPrice > buyPrice ? '#10b981' : '#ef4444'};">${Math.round(((baseSellPrice - buyPrice) / buyPrice) * 100)}%</strong>` : ''}
+      </div>`;
+      
+      sellingUnits.forEach((unit, index) => {
+        const sugg = suggestions[index];
+        const unitBuyCost = buyPrice > 0 ? Math.round((buyPrice / unit.quantityPerUnit) * 100) / 100 : 0;
+        const margin = unitBuyCost > 0 ? Math.round(((sugg.suggested - unitBuyCost) / unitBuyCost) * 100) : null;
+        
+        html += `<div class="bg-white border border-slate-200 rounded-xl p-4 mb-3">
+          <div class="flex justify-between items-center mb-2">
+            <strong>${unit.name}</strong>
+            <span class="bg-indigo-100 text-indigo-600 text-xs font-semibold px-2.5 py-1 rounded-full">${unit.quantityPerUnit} per ${currentItem.arrivalUnit}</span>
+          </div>
+          ${unitBuyCost > 0 ? `<p class="text-xs text-slate-500 mb-1.5">Cost per ${unit.name}: KSh ${unitBuyCost}</p>` : ''}
+          <p class="text-sm text-slate-500 mb-2">Suggested: <span class="font-bold text-indigo-600">KSh ${sugg.suggested}</span>
+            ${margin !== null ? `<span class="ml-2 text-xs px-2 py-0.5 rounded-full" style="background:${margin > 0 ? '#d1fae5' : '#fee2e2'}; color:${margin > 0 ? '#065f46' : '#991b1b'};">${margin > 0 ? '+' : ''}${margin}%</span>` : ''}
+          </p>
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-slate-500 font-semibold">KSh</span>
+            <input type="number" id="unitPrice_${index}" value="${sugg.actual}" step="0.01" min="0"
+              class="qa-input flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm">
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1">Adjust if needed / Badilisha bei ikiwa inahitajika</p>
+        </div>`;
+      });
+      
+      sellingUnitPricesList.innerHTML = html;
+      sellingUnitPricesSection.classList.remove('hidden');
+      
+      sellingUnits.forEach((_, index) => {
+        const input = document.getElementById(`unitPrice_${index}`);
+        if (input) {
+          input.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            if (!isNaN(value) && value >= 0) { 
+              if (!sellingUnitPrices[index]) sellingUnitPrices[index] = {}; 
+              sellingUnitPrices[index].actual = value; 
+            }
+          });
+        }
+      });
+    }
+
+    // ============================================
+    // CATEGORY CREATION FUNCTIONS
+    // ============================================
+
+    function renderCreateOptions() {
+      const keywords = currentItem.name.toLowerCase().split(' ').filter(k => k.length > 2);
+      let html = '<div class="mb-2"><p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2.5">✨ CREATE NEW</p>';
+      
+      keywords.forEach(keyword => {
+        html += `<div class="qa-create create-option px-4 py-3.5 bg-emerald-50 border border-dashed border-emerald-400 rounded-xl mb-2 cursor-pointer transition-all" data-keyword="${keyword}">
+          <p class="font-bold text-emerald-800 text-sm mb-0.5">Create "${keyword}" category</p>
+          <p class="text-xs text-slate-500">Click to choose where to place it</p>
+        </div>`;
+      });
+      
+      html += `<div class="qa-create create-option px-4 py-3.5 bg-emerald-50 border border-dashed border-emerald-400 rounded-xl mb-2 cursor-pointer transition-all" data-custom="true">
+        <p class="font-bold text-emerald-800 text-sm mb-0.5">Create custom category...</p>
+        <p class="text-xs text-slate-500">Specify your own category name</p>
+      </div></div>`;
+      
+      return html;
+    }
+
+    async function qaSelect(icon, title, message, options) {
+      return new Promise(resolve => {
+        const backdrop = document.createElement('div');
+        backdrop.className = 'fixed inset-0 bg-black/60 backdrop-blur flex items-center justify-center z-[20000] p-5 qa-fade-in';
+        const optionItems = options.map((opt, i) => `<div class="qa-cat-item px-3.5 py-2.5 cursor-pointer border-b border-slate-100 text-sm text-slate-700 last:border-b-0 transition-colors" data-index="${i}">${opt}</div>`).join('');
+        backdrop.innerHTML = `<div class="bg-white rounded-2xl p-7 w-full max-w-sm shadow-2xl text-center">
+          <div class="text-4xl mb-3">${icon}</div>
+          <div class="text-[17px] font-bold text-slate-800 mb-1.5">${title}</div>
+          <div class="text-sm text-slate-500 mb-5 leading-relaxed">${message}</div>
+          <div class="max-h-52 overflow-y-auto border border-slate-200 rounded-xl mb-4">${optionItems}</div>
+          <button class="qa-dlg-cancel px-5 py-2.5 rounded-xl bg-slate-100 text-slate-500 font-semibold text-sm transition-colors min-w-[100px]">Cancel</button>
+        </div>`;
+        
+        backdrop.querySelectorAll('.qa-cat-item').forEach(item => {
+          item.addEventListener('mouseenter', () => { item.style.background = '#e0e7ff'; });
+          item.addEventListener('mouseleave', () => { item.style.background = ''; });
+          item.addEventListener('click', () => { backdrop.remove(); resolve(parseInt(item.dataset.index)); });
+        });
+        
+        document.body.appendChild(backdrop);
+        backdrop.querySelector('.qa-dlg-cancel').addEventListener('click', () => { backdrop.remove(); resolve(null); });
+      });
+    }
+
+    async function qaPrompt(icon, title, message, placeholder = '', defaultVal = '') {
+      return new Promise(resolve => {
+        const backdrop = document.createElement('div');
+        backdrop.className = 'fixed inset-0 bg-black/60 backdrop-blur flex items-center justify-center z-[20000] p-5 qa-fade-in';
+        backdrop.innerHTML = `<div class="bg-white rounded-2xl p-7 w-full max-w-[340px] shadow-2xl text-center">
+          <div class="text-[44px] mb-4">${icon}</div>
+          <div class="text-[18px] font-bold text-slate-800 mb-2">${title}</div>
+          <div class="text-sm text-slate-500 mb-5 leading-relaxed">${message}</div>
+          <input class="qa-input w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-[15px] mb-4 text-left" type="text" placeholder="${placeholder}" value="${defaultVal}">
+          <div class="flex gap-3">
+            <button class="qa-dlg-cancel flex-1 py-3 rounded-xl bg-slate-100 text-slate-500 font-semibold text-sm transition-colors">Cancel</button>
+            <button class="qa-dlg-confirm flex-1 py-3 rounded-xl bg-indigo-600 text-white font-bold text-sm transition-all">Confirm</button>
+          </div>
+        </div>`;
+        
+        document.body.appendChild(backdrop);
+        const inputEl = backdrop.querySelector('.qa-input');
+        inputEl.focus();
+        inputEl.select();
+        
+        const confirm = () => { 
+          const v = inputEl.value.trim(); 
+          backdrop.remove(); 
+          resolve(v || null); 
+        };
+        
+        backdrop.querySelector('.qa-dlg-cancel').addEventListener('click', () => { backdrop.remove(); resolve(null); });
+        backdrop.querySelector('.qa-dlg-confirm').addEventListener('click', confirm);
+        inputEl.addEventListener('keydown', e => { 
+          if (e.key === 'Enter') confirm(); 
+          if (e.key === 'Escape') { backdrop.remove(); resolve(null); } 
+        });
+      });
+    }
+
+    async function qaAlert(icon, title, message, btnLabel = 'OK', btnClass = '') {
+      return new Promise(resolve => {
+        const backdrop = document.createElement('div');
+        backdrop.className = 'fixed inset-0 bg-black/60 backdrop-blur flex items-center justify-center z-[20000] p-5 qa-fade-in';
+        backdrop.innerHTML = `<div class="bg-white rounded-2xl p-7 w-full max-w-[340px] shadow-2xl text-center">
+          <div class="text-[44px] mb-4">${icon}</div>
+          <div class="text-[18px] font-bold text-slate-800 mb-2">${title}</div>
+          <div class="text-sm text-slate-500 mb-6 leading-relaxed">${message}</div>
+          <button class="qa-dlg-confirm ${btnClass} px-7 py-3 rounded-xl bg-indigo-600 text-white font-bold text-[15px] transition-all min-w-[120px]">${btnLabel}</button>
+        </div>`;
+        
+        document.body.appendChild(backdrop);
+        backdrop.querySelector('.qa-dlg-confirm').addEventListener('click', () => { backdrop.remove(); resolve(); });
+      });
+    }
+
+    async function qaConfirm(icon, title, message, confirmLabel = 'Yes', cancelLabel = 'Cancel', confirmClass = '') {
+      return new Promise(resolve => {
+        const backdrop = document.createElement('div');
+        backdrop.className = 'fixed inset-0 bg-black/60 backdrop-blur flex items-center justify-center z-[20000] p-5 qa-fade-in';
+        const confirmBg = confirmClass === 'green' ? 'bg-emerald-500' : confirmClass === 'red' ? 'bg-red-500' : 'bg-indigo-600';
+        backdrop.innerHTML = `<div class="bg-white rounded-2xl p-7 w-full max-w-[340px] shadow-2xl text-center">
+          <div class="text-[44px] mb-4">${icon}</div>
+          <div class="text-[18px] font-bold text-slate-800 mb-2">${title}</div>
+          <div class="text-sm text-slate-500 mb-6 leading-relaxed">${message}</div>
+          <div class="flex gap-3">
+            <button class="qa-dlg-cancel flex-1 py-3 rounded-xl bg-slate-100 text-slate-500 font-semibold text-sm transition-colors">${cancelLabel}</button>
+            <button class="qa-dlg-confirm flex-1 py-3 rounded-xl ${confirmBg} text-white font-bold text-sm transition-all">${confirmLabel}</button>
+          </div>
+        </div>`;
+        
+        document.body.appendChild(backdrop);
+        backdrop.querySelector('.qa-dlg-cancel').addEventListener('click', () => { backdrop.remove(); resolve(false); });
+        backdrop.querySelector('.qa-dlg-confirm').addEventListener('click', () => { backdrop.remove(); resolve(true); });
+      });
+    }
+
+    async function promptCreateSubcategory(parentCategory) {
+      const subName = await qaPrompt('📁', 'New Subcategory', `Enter a name for the new subcategory under <strong>${parentCategory.name}</strong>:`, 'e.g. Fertilizers, Bar Soaps...', currentItem.name.split(' ').slice(0,2).join(' '));
+      if (!subName) return;
+      
+      try {
+        const subRef = await addDoc(collection(db, 'Shops', shopId, 'categories'), { 
+          name: subName, 
+          parentId: parentCategory.id, 
+          createdAt: Date.now() 
+        });
+        
+        const newCategory = { 
+          id: subRef.id, 
+          name: subName, 
+          parentId: parentCategory.id, 
+          fullPath: parentCategory.fullPath + ' → ' + subName, 
+          itemCount: 0, 
+          subcatCount: 0, 
+          status: 'empty' 
+        };
+        
+        allCategories.push(newCategory);
+        categoryItemsCache[subRef.id] = [];
+        
+        const parent = allCategories.find(c => c.id === parentCategory.id);
+        if (parent) { 
+          parent.subcatCount += 1; 
+          if (parent.status === 'empty') parent.status = 'container'; 
+        }
+        
+        showToast(`✅ Created "${subName}"`);
+        goToSellingUnits(newCategory);
+      } catch (error) { 
+        console.error('Error creating subcategory:', error); 
+        showToast('Error creating category', 'error'); 
+      }
+    }
+
+    async function createTopLevelCategory(categoryName) {
+      try {
+        const catRef = await addDoc(collection(db, 'Shops', shopId, 'categories'), { 
+          name: categoryName, 
+          parentId: null, 
+          createdAt: Date.now() 
+        });
+        
+        const newCategory = { 
+          id: catRef.id, 
+          name: categoryName, 
+          parentId: null, 
+          fullPath: categoryName, 
+          itemCount: 0, 
+          subcatCount: 0, 
+          status: 'empty' 
+        };
+        
+        allCategories.push(newCategory);
+        categoryItemsCache[catRef.id] = [];
+        
+        showToast(`✅ Created "${categoryName}"`);
+        goToSellingUnits(newCategory);
+      } catch (error) { 
+        console.error('Error creating category:', error); 
+        showToast('Error creating category', 'error'); 
+      }
+    }
+
+    function renderBestMatches(categories) {
+      const container = document.getElementById('categoriesContainer');
+      if (!container) return;
+      
+      if (categories.length === 0) { 
+        container.innerHTML = `<p class="text-sm text-slate-500 mb-3">No matching categories found. Create a new one below.</p>${renderCreateOptions()}`; 
+        return; 
+      }
+      
+      let html = `<div class="mb-5"><p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2.5">⭐ BEST MATCHES</p><div class="border border-slate-200 rounded-xl bg-white overflow-hidden">`;
+      
+      categories.slice(0, 2).forEach(cat => {
+        const statusIcon = cat.status === 'leaf' ? '📦' : (cat.status === 'container' ? '📁' : '📂');
+        const badgeClasses = cat.status === 'leaf' ? 'bg-emerald-100 text-emerald-700' : (cat.status === 'container' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500');
+        const badgeText = cat.status === 'leaf' ? `${cat.itemCount} items` : (cat.status === 'container' ? `${cat.subcatCount} subcategories` : 'empty');
+        const examples = cat.matchingItems?.length > 0 ? `<p class="text-[12px] text-slate-400 italic mt-1">${cat.matchingItems.join(' • ')}</p>` : '';
+        
+        let actionButtons = '';
+        if (cat.status === 'leaf') {
+          actionButtons = `<button class="qa-btn-primary add-item-here px-3.5 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 transition-all min-h-[36px]" data-id="${cat.id}">+ Add Item Here</button>`;
+        } else if (cat.status === 'container') {
+          actionButtons = `<button class="qa-btn-secondary create-sub-here px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-white border border-slate-200 transition-all min-h-[36px]" data-id="${cat.id}">📁 Create Subcategory</button>`;
+        } else {
+          actionButtons = `<button class="qa-btn-primary add-item-here px-3.5 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 transition-all min-h-[36px]" data-id="${cat.id}">+ Add Item</button>
+                          <button class="qa-btn-secondary create-sub-here px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-white border border-slate-200 transition-all min-h-[36px]" data-id="${cat.id}">📁 Create Subcategory</button>`;
+        }
+        
+        const searchTerms2 = currentItem.name.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+        let matchReason = '';
+        if (cat.matchingItems?.length > 0) {
+          matchReason = `<p class="text-xs text-emerald-600 italic mt-1 mb-1.5">✅ Similar items: <em>${cat.matchingItems.slice(0,2).join(', ')}</em></p>`;
+        } else if (searchTerms2.some(t => cat.name.toLowerCase().includes(t))) {
+          matchReason = `<p class="text-xs text-emerald-600 italic mt-1 mb-1.5">✅ Category name matches your item</p>`;
+        }
+        
+        html += `<div class="qa-cat-item highlight px-4 py-3.5 border-b border-slate-100 last:border-b-0 transition-colors" data-id="${cat.id}" data-status="${cat.status}">
+          <div class="flex items-center gap-2 font-semibold text-[14px] text-slate-800 mb-1.5">${statusIcon} ${cat.fullPath}<span class="ml-1 text-[11px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-semibold">${cat.score}</span></div>
+          <div class="flex flex-wrap gap-1.5 mb-1.5"><span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${badgeClasses}">${badgeText}</span></div>
+          ${matchReason}${examples}
+          <div class="flex gap-2 flex-wrap mt-2.5">${actionButtons}</div>
+        </div>`;
+      });
+      
+      html += `</div></div><div class="relative text-center my-4 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+        <span class="relative z-10 bg-white px-3">or</span>
+        <div class="absolute inset-0 flex items-center"><div class="w-full h-px bg-slate-200"></div></div>
+      </div>${renderCreateOptions()}`;
+      
+      container.innerHTML = html;
+      attachCategoryEventListeners();
+    }
+
+    function renderSearchResults(categories, searchTerm) {
+      const container = document.getElementById('categoriesContainer');
+      if (!container) return;
+      
+      let html = `<div class="flex justify-between items-center mb-3">
+        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">🔍 Results for "${searchTerm}"</p>
+        <span id="backToMatches" class="qa-back-link text-xs font-semibold text-indigo-600 cursor-pointer transition-opacity">← Back to matches</span>
+      </div><div class="border border-slate-200 rounded-xl bg-white overflow-hidden">`;
+      
+      categories.slice(0, 2).forEach(cat => {
+        const statusIcon = cat.status === 'leaf' ? '📦' : (cat.status === 'container' ? '📁' : '📂');
+        html += `<div class="qa-cat-item px-4 py-3.5 border-b border-slate-100 last:border-b-0 transition-colors" data-id="${cat.id}" data-status="${cat.status}">
+          <div class="font-semibold text-[14px] text-slate-800 mb-2">${statusIcon} ${cat.fullPath}</div>
+          <button class="qa-btn-primary add-item-here px-3.5 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 transition-all min-h-[36px]" data-id="${cat.id}">+ Add Item</button>
+        </div>`;
+      });
+      
+      html += '</div>';
+      container.innerHTML = html;
+      
+      document.getElementById('backToMatches')?.addEventListener('click', () => { 
+        categoryFilter.value = ''; 
+        renderBestMatches(bestMatchCategories.slice(0, 2)); 
+      });
+      
+      attachCategoryEventListeners();
+    }
+
+    function attachCategoryEventListeners() {
+      document.querySelectorAll('#step2Overlay .add-item-here').forEach(btn => {
+        btn.addEventListener('click', (e) => { 
+          e.stopPropagation(); 
+          const category = allCategories.find(c => c.id === e.target.dataset.id); 
+          if (category) goToSellingUnits(category); 
+        });
+      });
+      
+      document.querySelectorAll('#step2Overlay .create-sub-here').forEach(btn => {
+        btn.addEventListener('click', (e) => { 
+          e.stopPropagation(); 
+          const category = allCategories.find(c => c.id === e.target.dataset.id); 
+          if (category) promptCreateSubcategory(category); 
+        });
+      });
+    }
+
+    function goToSellingUnits(category) {
+      selectedCategory = category;
+      sellingUnits = [];
+      
+      if (finalItemName) finalItemName.textContent = currentItem.name;
+      if (finalCategoryPath) finalCategoryPath.textContent = category.fullPath;
+      if (finalArrivalUnit) finalArrivalUnit.textContent = currentItem.arrivalUnit;
+      
+      if (mainQuestionUnit) mainQuestionUnit.textContent = currentItem.arrivalUnit;
+      if (mainQuestionItem) mainQuestionItem.textContent = currentItem.name;
+      if (packageUnit) packageUnit.textContent = currentItem.arrivalUnit;
+      if (baseUnitDisplay) baseUnitDisplay.textContent = currentItem.arrivalUnit;
+      if (wholeUnitLabel) wholeUnitLabel.textContent = `Whole ${currentItem.arrivalUnit}`;
+      if (wholeUnitDesc) wholeUnitDesc.textContent = `I sell the complete ${currentItem.arrivalUnit} as is`;
+      
+      updateHintsForItemType();
+      
+      if (smallerPartsChoice) smallerPartsChoice.classList.remove('selected');
+      if (wholeUnitChoice) wholeUnitChoice.classList.remove('selected');
+      if (partsSection) {
+        partsSection.classList.add('hidden');
+        partsSection.classList.remove('block');
+      }
+      if (wholeSection) {
+        wholeSection.classList.add('hidden');
+        wholeSection.classList.remove('block');
+      }
+      if (step3Continue) step3Continue.style.display = 'none';
+      
+      if (partNameInput) partNameInput.value = '';
+      if (partQtyInput) partQtyInput.value = '';
+      if (partsList) partsList.innerHTML = '';
+      if (addAnotherPartBtn) addAnotherPartBtn.style.display = 'none';
+      
+      addInitialStock = false;
+      initialStockData = { quantity: 0, buyPrice: 0, sellPrice: 0 };
+      sellingUnitPrices = {};
+      
+      if (stockDecisionSection) stockDecisionSection.style.display = 'block';
+      if (stockDetailsSection) {
+        stockDetailsSection.classList.add('hidden');
+        stockDetailsSection.classList.remove('block');
+      }
+      
+      if (initialStockUnit) initialStockUnit.textContent = currentItem.arrivalUnit;
+      if (buyPriceUnit) buyPriceUnit.textContent = currentItem.arrivalUnit;
+      if (sellPriceUnit) sellPriceUnit.textContent = currentItem.arrivalUnit;
+      if (initialStockInput) initialStockInput.value = 1;
+      if (buyPriceInput) buyPriceInput.value = '';
+      if (sellPriceInput) sellPriceInput.value = '';
+      
+      if (sellingUnitPricesSection) sellingUnitPricesSection.classList.add('hidden');
+      
+      if (step2Overlay) step2Overlay.classList.remove('visible');
+      if (step3Overlay) step3Overlay.classList.add('visible');
+    }
+
+    function updateHintsForItemType() {
+      const itemName = currentItem.name.toLowerCase();
+      const arrivalUnit = currentItem.arrivalUnit.toLowerCase();
+      
+      if (itemName.includes('feed') || itemName.includes('mash') || itemName.includes('chicken')) {
+        if (partNameInput) partNameInput.placeholder = 'e.g., 1kg pack, 2kg pack, 5kg pack';
+        if (partNameHint) partNameHint.textContent = 'Example: "1kg pack", "2kg pack", "5kg pack"';
+        if (qtyHint) qtyHint.textContent = `Example: If each pack is 1kg, then 25 packs fit in a ${arrivalUnit}`;
+      } else if (itemName.includes('soap') || itemName.includes('sabuni')) {
+        if (partNameInput) partNameInput.placeholder = 'e.g., Single bar, Pack of 3, Pack of 6';
+        if (partNameHint) partNameHint.textContent = 'Example: "Single bar", "Pack of 3", "Pack of 6"';
+        if (qtyHint) qtyHint.textContent = `Example: If you sell single bars and a carton has 24 bars, then 24 single bars fit in one ${arrivalUnit}`;
+      } else if (itemName.includes('oil') || itemName.includes('maziwa')) {
+        if (partNameInput) partNameInput.placeholder = 'e.g., 1L bottle, 500ml bottle, 250ml bottle';
+        if (partNameHint) partNameHint.textContent = 'Example: "1L bottle", "500ml bottle", "250ml bottle"';
+        if (qtyHint) qtyHint.textContent = `Example: If a ${arrivalUnit} is 20L and you sell 1L bottles, then 20 bottles fit in one ${arrivalUnit}`;
+      } else if (itemName.includes('herb') || itemName.includes('weed') || itemName.includes('pest') || itemName.includes('cide')) {
+        if (partNameInput) partNameInput.placeholder = 'e.g., 1L bottle, 500ml bottle, 100ml bottle';
+        if (partNameHint) partNameHint.textContent = 'Example: "1L bottle", "500ml bottle", "100ml bottle"';
+        if (qtyHint) qtyHint.textContent = `Example: If a ${arrivalUnit} is 20L and you sell 1L bottles, then 20 bottles fit in one ${arrivalUnit}`;
+      } else {
+        if (partNameInput) partNameInput.placeholder = 'e.g., Single piece, Pack of 6, Dozen';
+        if (partNameHint) partNameHint.textContent = 'Example: "Single piece", "Pack of 6", "Dozen"';
+        if (qtyHint) qtyHint.textContent = `Example: How many of these fit in one ${arrivalUnit}?`;
+      }
+    }
+
+    function renderPartsList() {
+      if (sellingUnits.length === 0) { 
+        if (partsList) partsList.innerHTML = ''; 
+        return; 
+      }
+      
+      let html = '<p class="font-bold text-slate-800 mb-2.5 text-sm">Packages you sell:</p>';
+      
+      sellingUnits.forEach((unit, index) => {
+        html += `<div class="qa-unit-item flex justify-between items-center bg-white border border-slate-200 rounded-xl px-4 py-3 mb-2 transition-all">
+          <div><strong class="text-slate-800">${unit.name}</strong>
+            <span class="inline-block ml-2 bg-indigo-100 text-indigo-600 text-xs font-semibold px-2.5 py-0.5 rounded-full">${unit.quantityPerUnit} per ${currentItem.arrivalUnit}</span>
+          </div>
+          <span class="qa-remove w-8 h-8 flex items-center justify-center rounded-full text-red-400 cursor-pointer transition-all text-base" data-index="${index}">✕</span>
+        </div>`;
+      });
+      
+      if (partsList) partsList.innerHTML = html;
+      
+      document.querySelectorAll('#partsList .qa-remove').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.dataset.index);
+          const removed = sellingUnits[idx];
+          sellingUnits.splice(idx, 1);
+          renderPartsList();
+          if (sellingUnits.length === 0 && addAnotherPartBtn) addAnotherPartBtn.style.display = 'none';
+          showUndoToast(`Removed "${removed.name}"`, () => { 
+            sellingUnits.splice(idx, 0, removed); 
+            renderPartsList(); 
+            if (addAnotherPartBtn) addAnotherPartBtn.style.display = 'block'; 
+          });
+        });
+      });
+    }
+
+    function showUndoToast(message, undoFn) {
+      const existing = document.getElementById('undoToast');
+      if (existing) existing.remove();
+      
+      const toast = document.createElement('div');
+      toast.id = 'undoToast';
+      toast.style.cssText = `position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#1e293b;color:white;padding:11px 18px;border-radius:50px;font-size:13px;z-index:10002;display:flex;align-items:center;gap:12px;animation:qaFadeIn 0.2s ease;white-space:nowrap;`;
+      toast.innerHTML = `<span>${message}</span><button id="undoBtn" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:4px 10px;border-radius:20px;cursor:pointer;font-weight:600;font-size:12px;">Undo / Rudisha</button>`;
+      
+      document.body.appendChild(toast);
+      
+      const timer = setTimeout(() => toast.remove(), 4000);
+      
+      toast.querySelector('#undoBtn').addEventListener('click', () => { 
+        clearTimeout(timer); 
+        toast.remove(); 
+        undoFn(); 
+      });
+    }
+
+    // ============================================
+    // STEP 4 PHOTO FUNCTIONS
+    // ============================================
+
+    function updatePreview(element, url) {
+      if (!element) return;
+      if (url) {
+        element.innerHTML = `<img src="${url}" alt="Preview" class="w-full h-full object-cover">`;
+      } else {
+        element.innerHTML = '<p class="text-xs text-slate-400 text-center p-2">No photo yet</p>';
+      }
+    }
+
+    function updatePhotoCardStatus(card, statusEl, hasImage) {
+      if (!card) return;
+      if (hasImage) {
+        card.classList.remove('border-red-200', 'bg-red-50/30');
+        card.classList.add('border-emerald-400', 'bg-emerald-50/30');
+        if (statusEl) { 
+          statusEl.textContent = 'Completed'; 
+          statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600 uppercase tracking-wide'; 
+        }
+      } else {
+        card.classList.remove('border-emerald-400', 'bg-emerald-50/30');
+        card.classList.add('border-red-200', 'bg-red-50/30');
+        if (statusEl) { 
+          statusEl.textContent = 'Required'; 
+          statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-500 uppercase tracking-wide'; 
+        }
+      }
+    }
+
+    function updatePhotoProgress() {
+      const mainComplete = itemImages.front && itemImages.back;
+      mainPhotoStatus.textContent = mainComplete ? '2/2' : '0/2';
+      mainPhotoStatus.className = mainComplete
+        ? 'text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700'
+        : 'text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-800';
+      
+      updatePhotoCardStatus(frontCard, frontStatus, !!itemImages.front);
+      updatePhotoCardStatus(backCard, backStatus, !!itemImages.back);
+      
+      let allComplete = !!mainComplete;
+      
+      if (sellingUnits.length > 0) {
+        let sellingUnitsSummary = '';
+        sellingUnits.forEach((unit, index) => {
+          const uImages = sellingUnitImages[index] || { front: null, back: null };
+          const unitComplete = uImages.front && uImages.back;
+          if (!unitComplete) allComplete = false;
+          sellingUnitsSummary += `<div class="flex justify-between items-center py-2 border-b border-dashed border-blue-200 last:border-b-0 ml-4">
+            <span class="text-sm font-semibold text-slate-700">📦 ${unit.name}</span>
+            <span class="text-xs font-bold px-3 py-1 rounded-full ${unitComplete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}">${unitComplete ? '2/2' : '0/2'}</span>
+          </div>`;
+        });
+        sellingUnitsPhotoSummary.innerHTML = sellingUnitsSummary;
+      }
+      
+      step4Finish.disabled = !allComplete;
+    }
+
+    async function uploadToCloudinary(file) {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, { 
+        method: 'POST', 
+        body: fd 
+      });
+      if (!res.ok) { 
+        const txt = await res.text().catch(() => ''); 
+        throw new Error(`Cloudinary upload failed: ${res.status} ${txt}`); 
+      }
+      return (await res.json()).secure_url;
+    }
+
+    function getFileFromInput(options = { useCamera: false }) {
+      return new Promise(resolve => {
+        const input = document.createElement('input');
+        input.type = 'file'; 
+        input.accept = 'image/*';
+        if (options.useCamera) input.capture = 'environment';
+        input.style.cssText = 'position:absolute;left:-9999px;opacity:0;pointer-events:none;';
+        document.body.appendChild(input);
+        
+        input.addEventListener('change', () => { 
+          const file = input.files?.[0] || null; 
+          if (input.parentNode) document.body.removeChild(input); 
+          resolve(file); 
+        });
+        
+        input.addEventListener('cancel', () => { 
+          if (input.parentNode) document.body.removeChild(input); 
+          resolve(null); 
+        });
+        
+        input.click();
+      });
+    }
+
+    function sendImageForEmbedding(imageUrl, imageIndex, unitIndex = null) {
+      if (!imageUrl || !currentItem) return;
+      fetch(`${FLASK_BACKEND_URL}/vectorize-item`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          event: 'image_saved', 
+          image_url: imageUrl, 
+          item_id: currentItem.name, 
+          shop_id: shopId, 
+          category_id: selectedCategory?.id, 
+          image_index: imageIndex, 
+          unit_index: unitIndex, 
+          timestamp: Date.now() 
+        })
+      }).then(r => r.json()).then(d => console.log('[BACKEND]', d)).catch(e => console.warn('Backend error:', e));
+    }
+
+    async function captureBaseImage(position) {
+      const itemDesc = `your ${currentItem.arrivalUnit} of ${currentItem.name}`;
+      const positionText = position === 'front' ? 'front' : 'back';
+      const imageIndex = position === 'front' ? 0 : 1;
+      
+      const useCamera = await qaConfirm('📸', `${positionText.charAt(0).toUpperCase() + positionText.slice(1)} Photo`,
+        `How do you want to add the <strong>${positionText}</strong> photo of <strong>${itemDesc}</strong>?`, 
+        '📷 Open Camera', 
+        '📁 Choose File', 
+        'green'
+      );
+      
+      const file = await getFileFromInput({ useCamera });
+      if (!file) return;
+      
+      const previewEl = position === 'front' ? frontPreview : backPreview;
+      const localUrl = URL.createObjectURL(file);
+      updatePreview(previewEl, localUrl);
+      previewEl.style.opacity = '0.6';
+      
+      try {
+        const url = await uploadToCloudinary(file);
+        URL.revokeObjectURL(localUrl);
+        previewEl.style.opacity = '1';
+        itemImages[position] = url;
+        updatePreview(previewEl, url);
+        updatePhotoCardStatus(position === 'front' ? frontCard : backCard, position === 'front' ? frontStatus : backStatus, true);
+        sendImageForEmbedding(url, imageIndex);
+        updatePhotoProgress();
+      } catch (error) {
+        console.error('Upload failed:', error);
+        updatePreview(previewEl, null);
+        previewEl.style.opacity = '1';
+        await qaAlert('❌', 'Upload Failed', 'Could not upload the image. Please check your connection and try again.', 'Try Again', 'red');
+      }
+    }
+
+    async function captureSellingUnitImage(unitIndex, position, unit) {
+      const itemDesc = `your ${unit.name} (${position} view)`;
+      
+      const useCamera = await qaConfirm('📸', `${position.charAt(0).toUpperCase() + position.slice(1)} Photo`,
+        `How do you want to add the <strong>${position}</strong> photo of <strong>${itemDesc}</strong>?`, 
+        '📷 Open Camera', 
+        '📁 Choose File', 
+        'green'
+      );
+      
+      const file = await getFileFromInput({ useCamera });
+      if (!file) return;
+      
+      const previewEl = document.getElementById(`unit${unitIndex}_${position}Preview`);
+      if (previewEl) { 
+        const lu = URL.createObjectURL(file); 
+        updatePreview(previewEl, lu); 
+        previewEl.style.opacity = '0.6'; 
+      }
+      
+      try {
+        const url = await uploadToCloudinary(file);
+        if (!sellingUnitImages[unitIndex]) sellingUnitImages[unitIndex] = { front: null, back: null };
+        sellingUnitImages[unitIndex][position] = url;
+        
+        if (previewEl) { 
+          previewEl.style.opacity = '1'; 
+          updatePreview(previewEl, url); 
+        }
+        
+        const card = document.getElementById(`unit${unitIndex}_${position}Card`);
+        const statusEl = document.getElementById(`unit${unitIndex}_${position}Status`);
+        if (card && statusEl) updatePhotoCardStatus(card, statusEl, true);
+        
+        sendImageForEmbedding(url, position === 'front' ? 0 : 1, unitIndex);
+        updatePhotoProgress();
+      } catch (error) {
+        console.error('Upload failed:', error);
+        if (previewEl) updatePreview(previewEl, null);
+        await qaAlert('❌', 'Upload Failed', 'Could not upload the image. Please check your connection and try again.', 'Try Again', 'red');
+      }
+    }
+
+    function renderSellingUnitsPhotoSection() {
+      if (sellingUnits.length === 0) { 
+        sellingUnitsPhotoContainer.style.display = 'none'; 
+        return; 
+      }
+      
+      sellingUnitsPhotoContainer.style.display = 'block';
+      let html = '';
+      
+      sellingUnits.forEach((unit, index) => {
+        const uImages = sellingUnitImages[index] || { front: null, back: null };
+        const unitJson = JSON.stringify(unit).replace(/"/g, '&quot;');
+        
+        const frontThumb = uImages.front 
+          ? `<img src="${uImages.front}" alt="Front" class="w-full h-full object-cover">` 
+          : '<p class="text-xs text-slate-400 text-center p-2">No photo yet</p>';
+        
+        const backThumb = uImages.back 
+          ? `<img src="${uImages.back}" alt="Back" class="w-full h-full object-cover">` 
+          : '<p class="text-xs text-slate-400 text-center p-2">No photo yet</p>';
+        
+        html += `<div class="mt-4 p-5 bg-white border border-slate-200 rounded-2xl" id="unitSection_${index}">
+          <div class="flex items-center gap-2.5 mb-4 pb-3 border-b border-slate-100">
+            <span class="text-lg">📦</span>
+            <span class="text-[15px] font-bold text-slate-800 flex-1">${unit.name}</span>
+            <span class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">${unit.quantityPerUnit} per ${currentItem.arrivalUnit}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <!-- Front photo card -->
+            <div class="qa-photo-card bg-white border-2 ${uImages.front ? 'border-emerald-400 bg-emerald-50/30' : 'border-red-200 bg-red-50/30'} rounded-xl p-3 transition-all duration-200" id="unit${index}_frontCard">
+              <div class="flex justify-between items-center mb-2.5">
+                <span class="font-bold text-slate-700 text-sm">Front View</span>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${uImages.front ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-500'} uppercase tracking-wide" id="unit${index}_frontStatus">${uImages.front ? 'Completed' : 'Required'}</span>
+              </div>
+              <div class="preview-container w-full bg-slate-100 border border-slate-200 rounded-lg mb-2.5 overflow-hidden flex items-center justify-center" id="unit${index}_frontPreview">
+                ${frontThumb}
+              </div>
+              <div class="flex gap-1.5">
+                <button class="qa-photo-action-btn flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white transition-all min-h-[36px]" onclick="window.captureSellingUnitImage(${index},'front',${unitJson})">📸 Camera</button>
+                <button class="qa-photo-action-btn flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold bg-white text-slate-600 border border-slate-200 transition-all min-h-[36px]" onclick="window.captureSellingUnitImage(${index},'front',${unitJson})">📁 Upload</button>
+              </div>
+            </div>
+            <!-- Back photo card -->
+            <div class="qa-photo-card bg-white border-2 ${uImages.back ? 'border-emerald-400 bg-emerald-50/30' : 'border-red-200 bg-red-50/30'} rounded-xl p-3 transition-all duration-200" id="unit${index}_backCard">
+              <div class="flex justify-between items-center mb-2.5">
+                <span class="font-bold text-slate-700 text-sm">Back View</span>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${uImages.back ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-500'} uppercase tracking-wide" id="unit${index}_backStatus">${uImages.back ? 'Completed' : 'Required'}</span>
+              </div>
+              <div class="preview-container w-full bg-slate-100 border border-slate-200 rounded-lg mb-2.5 overflow-hidden flex items-center justify-center" id="unit${index}_backPreview">
+                ${backThumb}
+              </div>
+              <div class="flex gap-1.5">
+                <button class="qa-photo-action-btn flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white transition-all min-h-[36px]" onclick="window.captureSellingUnitImage(${index},'back',${unitJson})">📸 Camera</button>
+                <button class="qa-photo-action-btn flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold bg-white text-slate-600 border border-slate-200 transition-all min-h-[36px]" onclick="window.captureSellingUnitImage(${index},'back',${unitJson})">📁 Upload</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      });
+      
+      sellingUnitsPhotoContainer.innerHTML = html;
+      
+      window.captureSellingUnitImage = captureSellingUnitImage;
+    }
+
+    function goToPhotos() {
+      if (photoItemName) photoItemName.textContent = currentItem.name;
+      if (photoArrivalUnit) photoArrivalUnit.textContent = currentItem.arrivalUnit;
+      if (baseUnitDisplayPhoto) baseUnitDisplayPhoto.textContent = currentItem.arrivalUnit;
+      
+      itemImages = { front: null, back: null };
+      sellingUnitImages = {};
+      
+      if (frontPreview) {
+        frontPreview.innerHTML = '<p class="text-xs text-slate-400 text-center p-2">No photo yet</p>';
+      }
+      if (backPreview) {
+        backPreview.innerHTML = '<p class="text-xs text-slate-400 text-center p-2">No photo yet</p>';
+      }
+      
+      updatePhotoCardStatus(frontCard, frontStatus, false);
+      updatePhotoCardStatus(backCard, backStatus, false);
+      
+      renderSellingUnitsPhotoSection();
+      updatePhotoProgress();
+      
+      if (step3Overlay) step3Overlay.classList.remove('visible');
+      if (step4Overlay) step4Overlay.classList.add('visible');
+    }
+
+    async function finalSave() {
+      try {
+        if (!itemImages.front || !itemImages.back) { 
+          await qaAlert('📸', 'Photos Required', 'Please add both front and back photos of the main item before saving.', 'Got it'); 
+          return; 
+        }
+        
+        if (sellingUnits.length > 0) {
+          for (let i = 0; i < sellingUnits.length; i++) {
+            const uImages = sellingUnitImages[i] || {};
+            if (!uImages.front || !uImages.back) { 
+              await qaAlert('📦', 'Photos Required', `Please add both front and back photos for <strong>${sellingUnits[i].name}</strong> before saving.`, 'Got it'); 
+              return; 
+            }
+          }
+        }
+        
+        function getActor() {
+          const sessionType = localStorage.getItem('sessionType') || 'owner';
+          const user = { uid: localStorage.getItem('userId') || 'unknown' };
+          if (sessionType === 'staff') {
+            try {
+              const ctx = JSON.parse(localStorage.getItem('staffContext') || '{}');
+              return { 
+                type: 'staff', 
+                authUid: user?.uid || null, 
+                staffId: ctx.staffId || null, 
+                name: ctx.name || '', 
+                email: ctx.email || '', 
+                roleName: ctx.roleName || '', 
+                accessLevel: ctx.accessLevel ?? null, 
+                shopId: ctx.shopId || shopId 
+              };
+            } catch(e) { 
+              return { type: 'staff', authUid: user?.uid, name: 'Staff' }; 
+            }
+          }
+          return { 
+            type: 'owner', 
+            authUid: user?.uid || null, 
+            name: localStorage.getItem('userName') || 'Owner', 
+            email: localStorage.getItem('userEmail') || '', 
+            accessLevel: 4, 
+            shopId 
+          };
+        }
+        
+        const actorDisplayName = actor => actor?.name || actor?.email || actor?.authUid || 'User';
+        const actor = getActor();
+        const timestamp = Date.now();
+        const date = new Date().toLocaleDateString();
+        
+        const updatedSellingUnits = sellingUnits.map((unit, index) => {
+          const priceInfo = sellingUnitPrices[index];
+          const uImages = sellingUnitImages[index] || {};
+          return { 
+            name: unit.name, 
+            conversion: unit.conversion || (1 / unit.quantityPerUnit), 
+            conversionFactor: unit.conversion || (1 / unit.quantityPerUnit), 
+            quantityPerUnit: unit.quantityPerUnit, 
+            sellPrice: priceInfo ? priceInfo.actual : null, 
+            images: [uImages.front, uImages.back].filter(Boolean), 
+            createdAt: timestamp, 
+            createdBy: actor 
+          };
+        });
+        
+        const itemData = { 
+          name: currentItem.name, 
+          categoryId: selectedCategory.id, 
+          baseUnit: currentItem.arrivalUnit, 
+          sellingUnits: updatedSellingUnits, 
+          images: [itemImages.front, itemImages.back].filter(Boolean), 
+          stock: initialStockData.quantity, 
+          buyPrice: initialStockData.buyPrice, 
+          sellPrice: initialStockData.sellPrice, 
+          stockTransactions: [], 
+          batches: [], 
+          createdAt: timestamp, 
+          updatedAt: timestamp, 
+          createdBy: actor, 
+          updatedBy: actor 
+        };
+        
+        if (initialStockData.quantity > 0) {
+          const batchId = `batch_${timestamp}_${Math.random().toString(36).substr(2, 6)}`;
+          const batch = { 
+            id: batchId, 
+            quantity: initialStockData.quantity, 
+            unit: currentItem.arrivalUnit, 
+            buyPrice: initialStockData.buyPrice, 
+            sellPrice: initialStockData.sellPrice, 
+            date, 
+            timestamp, 
+            addedBy: actorDisplayName(actor), 
+            performedBy: actor 
+          };
+          const stockTransaction = { 
+            id: `stock_${timestamp}_${Math.random().toString(36).substr(2, 6)}`, 
+            quantity: initialStockData.quantity, 
+            date, 
+            timestamp, 
+            type: 'stock_in', 
+            batchId, 
+            unit: currentItem.arrivalUnit, 
+            buyPrice: initialStockData.buyPrice, 
+            sellPrice: initialStockData.sellPrice, 
+            addedBy: actorDisplayName(actor), 
+            performedBy: actor, 
+            sessionType: localStorage.getItem('sessionType') || 'owner' 
+          };
+          itemData.batches = [batch]; 
+          itemData.stockTransactions = [stockTransaction];
+        }
+        
+        const itemsRef = collection(db, 'Shops', shopId, 'categories', selectedCategory.id, 'items');
+        const itemDoc = await addDoc(itemsRef, itemData);
+        
+        if (updatedSellingUnits.length > 0) {
+          for (const unit of updatedSellingUnits) {
+            await addDoc(collection(db, 'Shops', shopId, 'categories', selectedCategory.id, 'items', itemDoc.id, 'sellingUnits'), { ...unit, createdAt: timestamp, createdBy: actor });
+            await addDoc(collection(db, 'Shops', shopId, 'categories', selectedCategory.id, 'items', itemDoc.id, 'sellUnits'), { ...unit, createdAt: timestamp, createdBy: actor });
+          }
+        }
+        
+        if (!categoryItemsCache[selectedCategory.id]) categoryItemsCache[selectedCategory.id] = [];
+        categoryItemsCache[selectedCategory.id].push({ name: currentItem.name });
+        
+        const cat = allCategories.find(c => c.id === selectedCategory.id);
+        if (cat) { 
+          cat.itemCount += 1; 
+          cat.status = 'leaf'; 
+        }
+        
+        clearDraft();
+        showSuccessWithThumbnails(currentItem.name, selectedCategory.fullPath, initialStockData.quantity, currentItem.arrivalUnit, itemImages.front, updatedSellingUnits);
+        closeAllOverlays();
+        
+        if (window.reloadShopCategories) setTimeout(() => window.reloadShopCategories(), 500);
+      } catch (error) {
+        console.error('Error saving item:', error);
+        showToast('Error saving item', 'error');
+      }
+    }
+
+    function showSuccessWithThumbnails(itemName, categoryPath, stockQty, unit, mainImage, sellingUnits) {
+      const toast = document.createElement('div');
+      toast.style.cssText = `position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:white;border-radius:20px;padding:22px 26px;box-shadow:0 20px 60px rgba(0,0,0,0.2);z-index:10002;min-width:300px;max-width:420px;text-align:center;border-top:4px solid #10b981;animation:qaFadeIn 0.3s ease;`;
+      
+      let thumbs = '';
+      if (sellingUnits?.length > 0) {
+        thumbs = '<div style="margin:12px 0 8px"><p style="font-size:13px;color:#64748b;margin-bottom:8px">Selling units:</p><div style="display:flex;gap:8px;justify-content:center">';
+        sellingUnits.slice(0, 3).forEach(u => {
+          const t = u.images?.[0] || null;
+          thumbs += `<div style="text-align:center"><div style="width:46px;height:46px;border-radius:8px;background:#f1f5f9;overflow:hidden;border:1px solid #e2e8f0">${t ? `<img src="${t}" style="width:100%;height:100%;object-fit:cover">` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:18px">📷</div>'}</div><div style="font-size:10px;color:#64748b;margin-top:3px">${u.name}</div></div>`;
+        });
+        if (sellingUnits.length > 3) thumbs += `<div style="width:46px;height:46px;border-radius:8px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:#64748b;font-size:12px">+${sellingUnits.length - 3}</div>`;
+        thumbs += '</div></div>';
+      }
+      
+      toast.innerHTML = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:56px;height:56px;border-radius:12px;background:#f1f5f9;overflow:hidden;border:2px solid #10b981">${mainImage ? `<img src="${mainImage}" style="width:100%;height:100%;object-fit:cover">` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px">📦</div>'}</div><div style="flex:1;text-align:left"><div style="font-size:17px;font-weight:700;color:#1e293b">${itemName}</div><div style="font-size:12px;color:#64748b">Saved to <strong>${categoryPath}</strong></div></div></div>${thumbs}${stockQty > 0 ? `<div style="font-size:13px;background:#f0fdf4;color:#166534;padding:7px 12px;border-radius:20px;display:inline-block;margin:8px 0">📦 ${stockQty} ${unit} added to stock</div>` : ''}<div style="font-size:12px;color:#94a3b8;margin-top:8px">✓ Item saved successfully • Closing in 3s…</div>`;
+      
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    function closeAllOverlays() {
+      if (step2Overlay?.classList.contains('visible') || 
+          step3Overlay?.classList.contains('visible') || 
+          step4Overlay?.classList.contains('visible')) {
+        saveDraft();
+      } else {
+        clearDraft();
+      }
+      
+      [step1Overlay, step2Overlay, step3Overlay, step4Overlay].forEach(o => {
+        if (o) o.classList.remove('visible');
+      });
+      
+      document.body.style.overflow = '';
+      selectedCategory = null;
+      if (categoryFilter) categoryFilter.value = '';
+      sellingUnits = [];
+    }
+
+    function openStep1() {
+      step1Overlay.classList.add('visible');
+      document.body.style.overflow = 'hidden';
+      if (itemNameInput) itemNameInput.focus();
+      
+      if (arrivalUnitInput) arrivalUnitInput.style.borderColor = '';
+      sellingUnits = [];
+      _smartSuggestionApplied = false;
+      
+      const nameStatus = document.getElementById('nameStatus');
+      const arrStatus = document.getElementById('arrivalStatus');
+      if (nameStatus) nameStatus.textContent = '';
+      if (arrStatus) arrStatus.textContent = '';
+      if (loadingBarFill) loadingBarFill.style.width = '0%';
+      if (loadingProgress) loadingProgress.textContent = 'Preparing...';
+    }
+
+    function saveDraft(isAuto = false) {
+      if (!currentItem.name) return;
+      try {
+        sessionStorage.setItem('quickAddDraft', JSON.stringify({
+          item: currentItem,
+          sellingUnits,
+          initialStockData,
+          categoryId: selectedCategory?.id,
+          categoryPath: selectedCategory?.fullPath,
+          ts: Date.now()
+        }));
+      } catch (e) {}
+    }
+
+    function clearDraft() {
+      try { sessionStorage.removeItem('quickAddDraft'); } catch (e) {}
+    }
+
+    function showToast(message, type = 'success') {
+      const toast = document.createElement('div');
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 100px;
+        right: 28px;
+        background: ${type === 'success' ? '#10b981' : '#ef4444'};
+        color: white;
+        padding: 13px 22px;
+        border-radius: 50px;
+        font-weight: 600;
+        z-index: 10001;
+        animation: qaFadeIn 0.3s ease;
+        font-size: 14px;
+      `;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // ============================================
+    // HEADER BUTTON EVENT LISTENERS
+    // ============================================
+
+    // Quick Add Header Button - opens step 1
+    if (quickAddHeaderBtn) {
+      quickAddHeaderBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        openStep1();
+      });
+
+      // Add hover effect
+      quickAddHeaderBtn.addEventListener('mouseenter', () => {
+        quickAddHeaderBtn.style.transform = 'translateY(-2px)';
+      });
+
+      quickAddHeaderBtn.addEventListener('mouseleave', () => {
+        quickAddHeaderBtn.style.transform = 'translateY(0)';
+      });
+    }
+
+    // Categories Header Button - opens categories management with helpful prompt
+    if (categoriesHeaderBtn) {
+      categoriesHeaderBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        
+        // Show helpful message first time
+        const hasSeenPrompt = localStorage.getItem('hasSeenCategoriesPrompt');
+        
+        if (!hasSeenPrompt) {
+          const result = await qaConfirm(
+            '📁',
+            'Category Management',
+            'Quick Add is recommended for adding items.<br><br>' +
+            'Use Categories to organize your inventory structure.<br>' +
+            'Would you like to continue to Category Management?',
+            'Yes, open Categories',
+            'No, use Quick Add',
+            'green'
+          );
+          
+          if (result) {
+            // Close quick add if open
+            closeAllOverlays();
+            
+            // Open existing categories overlay
+            const originalCategoriesBtn = document.querySelector('.categories-btn');
+            if (originalCategoriesBtn) {
+              originalCategoriesBtn.click();
+            } else {
+              // Fallback - show the stock overlay
+              document.getElementById('overlay')?.classList.remove('hidden');
+            }
+          }
+          localStorage.setItem('hasSeenCategoriesPrompt', 'true');
+        } else {
+          // Directly open categories
+          closeAllOverlays();
+          const originalCategoriesBtn = document.querySelector('.categories-btn');
+          if (originalCategoriesBtn) {
+            originalCategoriesBtn.click();
+          } else {
+            document.getElementById('overlay')?.classList.remove('hidden');
+          }
+        }
+      });
+
+      // Add hover effect
+      categoriesHeaderBtn.addEventListener('mouseenter', () => {
+        categoriesHeaderBtn.style.transform = 'translateY(-2px)';
+      });
+
+      categoriesHeaderBtn.addEventListener('mouseleave', () => {
+        categoriesHeaderBtn.style.transform = 'translateY(0)';
+      });
+    }
+
+    // ============================================
+    // Original Event Listeners
+    // ============================================
+
+    // We still keep the FAB click handler for backward compatibility, but FAB is hidden
+    if (fab) fab.addEventListener('click', openStep1);
+
+    if (step1Close) step1Close.addEventListener('click', closeAllOverlays);
+    if (step1Cancel) step1Cancel.addEventListener('click', closeAllOverlays);
+    if (step2Close) step2Close.addEventListener('click', closeAllOverlays);
+    if (step3Close) step3Close.addEventListener('click', closeAllOverlays);
+    if (step4Close) step4Close.addEventListener('click', closeAllOverlays);
+
+    [step1Overlay, step2Overlay, step3Overlay, step4Overlay].forEach(overlay => {
+      if (overlay) {
+        overlay.addEventListener('click', (e) => { 
+          if (e.target === overlay) closeAllOverlays(); 
+        });
+      }
+    });
+
+    if (exampleChips) {
+      exampleChips.forEach(chip => { 
+        chip.addEventListener('click', () => { 
+          if (arrivalUnitInput) {
+            arrivalUnitInput.value = chip.dataset.example || '';
+          }
+        }); 
+      });
+    }
+
+    if (itemNameInput) {
+      itemNameInput.addEventListener('input', (e) => {
+        const val = e.target.value.trim();
+        const nameStatus = document.getElementById('nameStatus');
+        if (nameStatus) { 
+          nameStatus.textContent = val.length >= 2 ? '✓' : ''; 
+          nameStatus.style.color = '#10b981'; 
+        }
+        if (val.length >= 3) applySmartDefaults(val); 
+        else _smartSuggestionApplied = false;
+      });
+    }
+
+    if (arrivalUnitInput) {
+      arrivalUnitInput.addEventListener('input', (e) => {
+        const val = e.target.value.trim();
+        const arrStatus = document.getElementById('arrivalStatus');
+        if (arrStatus) {
+          const hasNumAndUnit = /\d/.test(val) || val.split(' ').length >= 2;
+          if (val.length >= 3 && hasNumAndUnit) { 
+            arrStatus.textContent = '✓'; 
+            arrStatus.style.color = '#10b981'; 
+            arrivalUnitInput.style.borderColor = '#10b981'; 
+          }
+          else if (val.length > 0) { 
+            arrStatus.textContent = '⚠'; 
+            arrStatus.style.color = '#f59e0b'; 
+            arrivalUnitInput.style.borderColor = '#f59e0b'; 
+          }
+          else { 
+            arrStatus.textContent = ''; 
+            arrivalUnitInput.style.borderColor = ''; 
+          }
+        }
+      });
+    }
+
+    if (step1Continue) {
+      step1Continue.addEventListener('click', async () => {
+        const name = itemNameInput?.value.trim() || '';
+        const arrival = arrivalUnitInput?.value.trim() || '';
+        
+        if (!name) { 
+          await qaAlert('✏️', 'Item Name Required', 'Please enter the name of the item you are adding.', 'OK');
+          return; 
+        }
+        
+        if (!arrival) { 
+          await qaAlert('📦', 'Arrival Unit Required', 'Please specify how this item arrives from the supplier (e.g. 50kg bag, carton of 24).', 'OK');
+          return; 
+        }
+        
+        step1Continue.disabled = true;
+        const originalText = step1Continue.innerHTML;
+        
+        currentItem = { name, arrivalUnit: arrival };
+        if (summaryItemName) summaryItemName.textContent = currentItem.name;
+        if (summaryArrivalUnit) summaryArrivalUnit.textContent = currentItem.arrivalUnit;
+        
+        step1Overlay.classList.remove('visible');
+        step2Overlay.classList.add('visible');
+        
+        const container = document.getElementById('categoriesContainer');
+        if (container) {
+          container.innerHTML = `<div class="text-center py-10 px-5 bg-white border border-slate-200 rounded-2xl my-2">
+            <div class="qa-spin w-11 h-11 border-[3px] border-slate-200 border-t-indigo-600 rounded-full mx-auto mb-5"></div>
+            <p class="text-base font-bold text-slate-800 mb-1.5">Finding best categories for "${currentItem.name}"...</p>
+            <div class="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden mb-3 max-w-xs mx-auto">
+              <div class="h-full bg-gradient-to-r from-indigo-600 to-indigo-400 rounded-full transition-all duration-500" style="width:60%"></div>
+            </div>
+            <span class="inline-block px-4 py-1.5 bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-full">Almost ready...</span>
+          </div>`;
+        }
+        
+        try {
+          if (allCategories.length === 0) { 
+            step1Continue.innerHTML = 'Loading...'; 
+            await preloadAllData(); 
+          }
+          
+          bestMatchCategories = scoreCategories(name);
+          
+          if (bestMatchCategories.length > 0) {
+            renderBestMatches(bestMatchCategories.slice(0, 2));
+          } else {
+            if (container) {
+              container.innerHTML = `<p class="text-sm text-slate-500 mb-3">No matching categories found. Create a new one below.</p>${renderCreateOptions()}`;
+            }
+          }
+        } catch(err) {
+          console.error('Quick Add: error during search', err);
+          if (container) {
+            container.innerHTML = `<p class="text-sm text-red-500 mb-3">Error loading categories. Please try again.</p>${renderCreateOptions()}`;
+          }
+        }
+        
+        step1Continue.disabled = false;
+        step1Continue.innerHTML = originalText;
+      });
+    }
+
+    if (step2Back) {
+      step2Back.addEventListener('click', () => { 
+        step2Overlay.classList.remove('visible'); 
+        step1Overlay.classList.add('visible'); 
+        if (categoryFilter) categoryFilter.value = '';
+      });
+    }
+    
+    if (step3Back) {
+      step3Back.addEventListener('click', () => { 
+        step3Overlay.classList.remove('visible'); 
+        step2Overlay.classList.add('visible');
+      });
+    }
+    
+    if (step3Continue) {
+      step3Continue.addEventListener('click', goToPhotos);
+    }
+    
+    if (step4Back) {
+      step4Back.addEventListener('click', () => { 
+        step4Overlay.classList.remove('visible'); 
+        step3Overlay.classList.add('visible');
+      });
+    }
+
+    if (stockYesBtn) {
+      stockYesBtn.addEventListener('click', () => { 
+        addInitialStock = true; 
+        if (stockDecisionSection) stockDecisionSection.style.display = 'none'; 
+        if (stockDetailsSection) {
+          stockDetailsSection.classList.remove('hidden'); 
+          stockDetailsSection.classList.add('block');
+        }
+      });
+    }
+    
+    if (stockNoBtn) {
+      stockNoBtn.addEventListener('click', () => { 
+        addInitialStock = false; 
+        initialStockData = { quantity: 0, buyPrice: 0, sellPrice: 0 }; 
+        goToPhotos();
+      });
+    }
+    
+    if (stockBackBtn) {
+      stockBackBtn.addEventListener('click', () => { 
+        if (stockDetailsSection) {
+          stockDetailsSection.classList.add('hidden'); 
+          stockDetailsSection.classList.remove('block'); 
+        }
+        if (stockDecisionSection) stockDecisionSection.style.display = 'block'; 
+      });
+    }
+
+    if (smallerPartsChoice) {
+      smallerPartsChoice.addEventListener('click', () => {
+        smallerPartsChoice.classList.add('selected'); 
+        if (wholeUnitChoice) wholeUnitChoice.classList.remove('selected');
+        if (partsSection) {
+          partsSection.classList.remove('hidden'); 
+          partsSection.classList.add('block');
+        }
+        if (wholeSection) {
+          wholeSection.classList.add('hidden'); 
+          wholeSection.classList.remove('block');
+        }
+        if (step3Continue) step3Continue.style.display = 'inline-flex'; 
+        sellingUnits = []; 
+        renderPartsList();
+      });
+    }
+    
+    if (wholeUnitChoice) {
+      wholeUnitChoice.addEventListener('click', () => {
+        wholeUnitChoice.classList.add('selected'); 
+        if (smallerPartsChoice) smallerPartsChoice.classList.remove('selected');
+        if (wholeSection) {
+          wholeSection.classList.remove('hidden'); 
+          wholeSection.classList.add('block');
+        }
+        if (partsSection) {
+          partsSection.classList.add('hidden'); 
+          partsSection.classList.remove('block');
+        }
+        if (step3Continue) step3Continue.style.display = 'inline-flex';
+        sellingUnits = [{ name: `Whole ${currentItem.arrivalUnit}`, quantityPerUnit: 1, conversion: 1 }];
+      });
+    }
+
+    if (partNameInput) {
+      partNameInput.addEventListener('input', (e) => { 
+        if (partNamePreview) partNamePreview.textContent = e.target.value.trim() || 'packages'; 
+      });
+    }
+
+    if (addPartBtn) {
+      addPartBtn.addEventListener('click', async () => {
+        const name = partNameInput?.value.trim();
+        const qty = parseInt(partQtyInput?.value);
+        
+        if (!name) { 
+          await qaAlert('✏️', 'Package Name Required', 'Please enter a name for this package size (e.g. 1kg pack, Single bar).', 'OK'); 
+          return; 
+        }
+        
+        if (!qty || qty <= 0) { 
+          await qaAlert('⚠️', 'Invalid Quantity', 'Please enter how many of these packages fit in one arrival unit.', 'OK'); 
+          return; 
+        }
+        
+        sellingUnits.push({ name, quantityPerUnit: qty, conversion: 1/qty });
+        if (partNameInput) partNameInput.value = '';
+        if (partQtyInput) partQtyInput.value = '';
+        if (partNamePreview) partNamePreview.textContent = 'packages';
+        renderPartsList();
+        if (addAnotherPartBtn) addAnotherPartBtn.style.display = 'block';
+      });
+    }
+
+    if (addAnotherPartBtn) {
+      addAnotherPartBtn.addEventListener('click', () => {
+        if (partNameInput) partNameInput.focus();
+      });
+    }
+
+    if (categoryFilter) {
+      categoryFilter.addEventListener('input', (e) => {
+        const searchText = e.target.value.toLowerCase();
+        if (searchText.length > 0) {
+          const filtered = allCategories.filter(cat => 
+            cat.name.toLowerCase().includes(searchText) || 
+            cat.fullPath.toLowerCase().includes(searchText)
+          ).slice(0, 2);
+          renderSearchResults(filtered, searchText);
+        } else {
+          renderBestMatches(bestMatchCategories.slice(0, 2));
+        }
+      });
+    }
+
+    document.addEventListener('click', async (e) => {
+      const createOption = e.target.closest('.create-option');
+      if (!createOption || !step2Overlay?.classList.contains('visible')) return;
+      
+      const keyword = createOption.dataset.keyword;
+      const isCustom = createOption.dataset.custom;
+      
+      if (keyword) {
+        const nonLeaf = allCategories.filter(c => c.status !== 'leaf');
+        const options = ['📂 Top level (no parent)', ...nonLeaf.map(c => c.fullPath)];
+        const chosen = await qaSelect('📁', `Place "${keyword}" under...`, `Where should the new <strong>${keyword}</strong> category go?`, options);
+        
+        if (chosen === null) return;
+        
+        if (chosen === 0) {
+          createTopLevelCategory(keyword);
+        } else {
+          const parent = allCategories.find(c => c.fullPath === nonLeaf[chosen - 1].fullPath);
+          if (parent) promptCreateSubcategory(parent);
+        }
+      } else if (isCustom) {
+        const customName = await qaPrompt('📁', 'New Category', 'Enter a name for the new category:', 'e.g. Fertilizers, Beverages...');
+        if (customName) createTopLevelCategory(customName);
+      }
+    });
+
+    if (sellPriceInput) {
+      sellPriceInput.addEventListener('input', (e) => {
+        const baseSellPrice = parseFloat(e.target.value);
+        if (!isNaN(baseSellPrice) && baseSellPrice > 0 && sellingUnits.length > 0) {
+          renderSellingUnitPrices(baseSellPrice);
+        } else {
+          if (sellingUnitPricesSection) sellingUnitPricesSection.classList.add('hidden');
+        }
+      });
+    }
+
+    if (stockAddBtn) {
+      stockAddBtn.addEventListener('click', async () => {
+        const quantity = parseInt(initialStockInput?.value);
+        const buyPrice = parseFloat(buyPriceInput?.value) || 0;
+        const sellPrice = parseFloat(sellPriceInput?.value) || 0;
+        
+        if (isNaN(quantity) || quantity <= 0) { 
+          await qaAlert('⚠️', 'Invalid Quantity', 'Please enter a valid quantity (must be 1 or more).', 'OK'); 
+          return; 
+        }
+        
+        const updatedSellingUnits = sellingUnits.map((unit, index) => { 
+          const priceInput = document.getElementById(`unitPrice_${index}`); 
+          return { 
+            ...unit, 
+            sellPrice: priceInput ? parseFloat(priceInput.value) || null : null 
+          }; 
+        });
+        
+        sellingUnits = updatedSellingUnits; 
+        initialStockData = { quantity, buyPrice, sellPrice }; 
+        goToPhotos();
+      });
+    }
+
+    if (captureFrontBtn) captureFrontBtn.addEventListener('click', () => captureBaseImage('front'));
+    if (uploadFrontBtn) uploadFrontBtn.addEventListener('click', () => captureBaseImage('front'));
+    if (captureBackBtn) captureBackBtn.addEventListener('click', () => captureBaseImage('back'));
+    if (uploadBackBtn) uploadBackBtn.addEventListener('click', () => captureBaseImage('back'));
+
+    if (step4Finish) {
+      step4Finish.addEventListener('click', async () => await finalSave());
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { 
+        if ([step1Overlay, step2Overlay, step3Overlay, step4Overlay].some(o => o?.classList.contains('visible'))) {
+          closeAllOverlays();
+        }
+      }
+      
+      if (e.key === 'Enter' && step1Overlay?.classList.contains('visible')) {
+        const active = document.activeElement;
+        if (active === itemNameInput || active === arrivalUnitInput) { 
+          e.preventDefault(); 
+          if (step1Continue) step1Continue.click(); 
+        }
+      }
+    });
+
+    window.captureBaseImage = captureBaseImage;
+    window.captureSellingUnitImage = captureSellingUnitImage;
+
+    console.log('✅ Enhanced Quick Add ready with header buttons (Quick Add first, Categories second)');
+  }
+
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(initQuickAdd, 100);
+    });
+  } else {
+    setTimeout(initQuickAdd, 100);
+  }
+
+})();
+
+// Helper to get actor info
+function getQuickAddActor() {
+  const sessionType = localStorage.getItem('sessionType') || 'owner';
+  if (sessionType === 'staff') {
+    try {
+      const ctx = JSON.parse(localStorage.getItem('staffContext') || '{}');
+      return { 
+        type: 'staff', 
+        staffId: ctx.staffId || null, 
+        name: ctx.name || 'Staff', 
+        email: ctx.email || '', 
+        roleName: ctx.roleName || '', 
+        accessLevel: ctx.accessLevel ?? null, 
+        shopId: ctx.shopId || localStorage.getItem('activeShopId') 
+      };
+    } catch(e) { 
+      return { type: 'staff', name: 'Staff' }; 
+    }
+  }
+  return { 
+    type: 'owner', 
+    name: localStorage.getItem('userName') || 'Owner', 
+    email: localStorage.getItem('userEmail') || '', 
+    accessLevel: 4, 
+    shopId: localStorage.getItem('activeShopId') 
+  };
+}
+
+
+/* ============================================================
+   OVERRIDE - HIDE OLD CATEGORIES BUTTON
+   ============================================================ */
+.categories-btn {
+    display: none !important;
+}

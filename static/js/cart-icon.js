@@ -4,6 +4,9 @@
 // FIXED: Added proper staff handling, undefined value checks, and bilingual support
 // ENHANCED: Multi-payment (Cash, M-Pesa, Card, Split) + Multi‑tab support
 // CURRENCY: All prices in KSh (Kenyan Shillings)
+// UPDATED: Floating cart icon only appears when items are in cart (hidden from dashboard by default)
+// FIXED: Force hide cart icon on page load regardless of localStorage data
+// UI FIX: Redesigned cart modal to show items properly with more space
 
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { db } from "./firebase-config.js";
@@ -36,6 +39,45 @@ let totalAmount = 0;
 // ====================================================
 function debugLog(message, data = null) {
     console.log(`🛒 ${message}`, data || '');
+}
+
+// ====================================================
+// FORCE REMOVE ANY EXISTING CART ICON
+// ====================================================
+function removeExistingCartIcon() {
+    const oldIcons = document.querySelectorAll('[id*="cart"], [class*="cart-icon"], #sales-cart-icon');
+    oldIcons.forEach(icon => {
+        if (icon.id !== 'sales-overlay-cart') { // Don't remove the overlay cart
+            console.log('🗑️ Removing old cart icon:', icon.id || 'unnamed element');
+            icon.remove();
+        }
+    });
+}
+
+// ====================================================
+// RESET CART DATA ON PAGE LOAD
+// ====================================================
+function resetCartData() {
+    // Clear any existing cart data from localStorage but keep the structure
+    const saved = localStorage.getItem('superkeeper_tabs');
+    if (saved) {
+        try {
+            const data = JSON.parse(saved);
+            // If there are items, clear them but keep tabs structure
+            if (data.tabs) {
+                Object.keys(data.tabs).forEach(tabId => {
+                    if (data.tabs[tabId].items && data.tabs[tabId].items.length > 0) {
+                        console.log('🧹 Clearing items from tab:', tabId);
+                        data.tabs[tabId].items = [];
+                        data.tabs[tabId].total = 0;
+                    }
+                });
+                localStorage.setItem('superkeeper_tabs', JSON.stringify(data));
+            }
+        } catch (e) {
+            console.error('Error resetting cart data:', e);
+        }
+    }
 }
 
 // ====================================================
@@ -252,11 +294,52 @@ function saveActiveTab() {
 }
 
 // ====================================================
+// CART ICON VISIBILITY CONTROL
+// ====================================================
+
+/**
+ * Hide the floating cart icon (used when sales overlay is open)
+ */
+function hideCartIcon() {
+    const cartIcon = document.getElementById('sales-cart-icon');
+    if (cartIcon) {
+        cartIcon.style.display = 'none';
+        console.log('🛒 Floating cart icon hidden');
+    }
+}
+
+/**
+ * Show the floating cart icon (used when sales overlay is closed)
+ * Only shows if there are items in the cart
+ */
+function showCartIcon() {
+    const cartIcon = document.getElementById('sales-cart-icon');
+    if (cartIcon && getCartCount() > 0) {
+        cartIcon.style.display = 'block';
+        console.log('🛒 Floating cart icon shown');
+    } else if (getCartCount() > 0) {
+        // Create it if it doesn't exist and there are items
+        updateCartIcon();
+    }
+}
+
+// ====================================================
 // CART ICON (now shows active tab + tabs badge)
 // ====================================================
 
 function updateCartIcon() {
     debugLog('Updating cart icon...');
+    
+    const count = getCartCount();
+    
+    // Don't create or show icon if cart is empty
+    if (count === 0) {
+        const cartIcon = document.getElementById('sales-cart-icon');
+        if (cartIcon) {
+            cartIcon.style.display = 'none';
+        }
+        return;
+    }
     
     let cartIcon = document.getElementById('sales-cart-icon');
 
@@ -267,7 +350,6 @@ function updateCartIcon() {
         addCartIconStyles();
     }
 
-    const count = getCartCount();
     const total = getCartTotal();
     const tabsCount = Object.keys(tabs).length;
     const activeLabel = getActiveTab().label;
@@ -325,6 +407,12 @@ function updateCartIcon() {
         setTimeout(() => container.style.animation = '', 400);
     }
     
+    // Make sure the icon is visible only if not hidden by sales overlay
+    const salesOverlay = document.getElementById('sales-overlay');
+    if (!salesOverlay || salesOverlay.style.display !== 'flex') {
+        cartIcon.style.display = 'block';
+    }
+    
     debugLog('Cart icon updated');
 }
 
@@ -372,8 +460,8 @@ function addCartIconStyles() {
                 background: white;
                 border-radius: 20px;
                 width: 100%;
-                max-width: 600px;
-                max-height: 85vh;
+                max-width: 700px;
+                max-height: 90vh;
                 display: flex;
                 flex-direction: column;
                 overflow: hidden;
@@ -513,6 +601,172 @@ function addCartIconStyles() {
             }
             .all-tab-edit-icon:hover {
                 opacity: 1;
+            }
+            
+            /* Compact cart item styles */
+            .cart-items-container {
+                flex: 1;
+                overflow-y: auto;
+                padding: 16px;
+                max-height: 50vh;
+            }
+            
+            .cart-item {
+                background: #f8f9fa;
+                border-radius: 12px;
+                padding: 12px;
+                margin-bottom: 8px;
+                border: 1px solid #e9ecef;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                transition: all 0.2s;
+            }
+            
+            .cart-item:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+                border-color: #3b82f6;
+            }
+            
+            .item-details {
+                flex: 2;
+            }
+            
+            .item-name {
+                font-weight: 600;
+                color: #333;
+                font-size: 15px;
+                margin-bottom: 2px;
+            }
+            
+            .item-meta {
+                font-size: 12px;
+                color: #666;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+            
+            .item-badge {
+                font-size: 10px;
+                padding: 2px 8px;
+                border-radius: 12px;
+                font-weight: 600;
+                display: inline-block;
+            }
+            
+            .badge-base { background: #e3f2fd; color: #1976d2; }
+            .badge-unit { background: #f3e5f5; color: #7b1fa2; }
+            .badge-switch { background: #fff3e0; color: #f57c00; }
+            
+            .item-price-section {
+                flex: 1;
+                text-align: right;
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 12px;
+            }
+            
+            .item-subtotal {
+                font-weight: 700;
+                color: #2ed573;
+                font-size: 16px;
+                min-width: 100px;
+            }
+            
+            .remove-item-btn {
+                background: #ff6b6b;
+                color: white;
+                border: none;
+                width: 32px;
+                height: 32px;
+                border-radius: 8px;
+                font-size: 18px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.2s;
+                flex-shrink: 0;
+            }
+            
+            .remove-item-btn:hover {
+                background: #fa5252;
+            }
+            
+            .cart-footer {
+                padding: 20px;
+                border-top: 2px solid #e9ecef;
+                background: #f8f9fa;
+            }
+            
+            .total-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 16px;
+            }
+            
+            .total-label {
+                font-size: 14px;
+                color: #666;
+            }
+            
+            .total-amount {
+                font-size: 28px;
+                font-weight: 800;
+                color: #333;
+            }
+            
+            .action-buttons {
+                display: flex;
+                gap: 12px;
+            }
+            
+            .action-btn {
+                flex: 1;
+                padding: 14px;
+                border: none;
+                border-radius: 12px;
+                font-weight: 600;
+                font-size: 15px;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            
+            .action-btn.continue {
+                background: #e9ecef;
+                color: #666;
+            }
+            
+            .action-btn.continue:hover {
+                background: #dee2e6;
+            }
+            
+            .action-btn.checkout {
+                background: linear-gradient(135deg, #2ed573, #1dd1a1);
+                color: white;
+            }
+            
+            .action-btn.checkout:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(46, 213, 115, 0.3);
+            }
+            
+            .action-btn.clear {
+                background: #fff5f5;
+                color: #ff6b6b;
+                border: 1px solid #ff6b6b;
+                padding: 8px 16px;
+                font-size: 13px;
+            }
+            
+            .action-btn.clear:hover {
+                background: #ff6b6b;
+                color: white;
             }
         `;
         document.head.appendChild(style);
@@ -694,16 +948,16 @@ function showAllTabsModal() {
     const backdrop = document.createElement('div');
     backdrop.className = 'cart-modal-backdrop';
     backdrop.innerHTML = `
-        <div class="cart-modal-container" style="max-width: 400px;">
+        <div class="cart-modal-container" style="max-width: 450px;">
             <div style="
                 background: linear-gradient(135deg, #667eea, #764ba2);
                 color: white;
-                padding: 20px;
+                padding: 16px;
                 text-align: center;
             ">
-                <h2 style="margin:0; font-size:20px;">All Tabs / Vichupo Vyote</h2>
+                <h2 style="margin:0; font-size:18px;">All Tabs / Vichupo Vyote</h2>
             </div>
-            <div style="padding: 20px; max-height: 60vh; overflow-y: auto;">
+            <div style="padding: 16px; max-height: 60vh; overflow-y: auto;">
                 ${tabsList.map(t => `
                     <div class="all-tab-item" data-tab-id="${t.id}" style="
                         display: flex;
@@ -721,19 +975,19 @@ function showAllTabsModal() {
                             <span class="all-tab-edit-icon" data-edit-tab-id="${t.id}" title="Edit name / Hariri jina">✎</span>
                         </div>
                         <div>
-                            <span style="font-size:12px; color:#666;">${t.itemCount} items | KSh ${t.total.toFixed(2)}</span>
-                            ${!t.isActive ? '<span style="color:#3b82f6; margin-left:10px;">Tap to switch</span>' : '<span style="color:#10b981; margin-left:10px;">✓ Active</span>'}
+                            <span style="font-size:11px; color:#666;">${t.itemCount} items | KSh ${t.total.toFixed(2)}</span>
                         </div>
                     </div>
                 `).join('')}
             </div>
-            <div style="padding: 16px; border-top:1px solid #e9ecef; text-align:center;">
+            <div style="padding: 12px; border-top:1px solid #e9ecef; text-align:center;">
                 <button id="close-all-tabs-btn" style="
                     background: #e9ecef;
                     border: none;
-                    padding: 10px 20px;
+                    padding: 8px 16px;
                     border-radius: 30px;
                     font-weight: 600;
+                    font-size:13px;
                     cursor: pointer;
                 ">Close / Funga</button>
             </div>
@@ -758,7 +1012,6 @@ function showAllTabsModal() {
             e.stopPropagation();
             const tabId = icon.dataset.editTabId;
             editTabLabel(tabId);
-            // After rename, the modal will be refreshed automatically by editTabLabel
         });
     });
 
@@ -776,7 +1029,7 @@ function showAllTabsModal() {
 }
 
 // ====================================================
-// CART REVIEW MODAL (with tab switcher + edit icons + overflow handling) - UPDATED with KSh
+// CART REVIEW MODAL - REDESIGNED FOR BETTER VISIBILITY
 // ====================================================
 
 function showCartReview() {
@@ -810,7 +1063,7 @@ function showCartReview() {
         // Show all
         tabsHtml = tabsList.map(t => `
             <button class="tab-button ${t.isActive ? 'active' : ''}" data-tab-id="${t.id}">
-                ${t.label} (${t.itemCount} items | KSh ${t.total.toFixed(2)})
+                ${t.label} (${t.itemCount})
                 <span class="tab-edit-icon" data-edit-tab-id="${t.id}" title="Edit name / Hariri jina">✎</span>
             </button>
         `).join('');
@@ -819,7 +1072,7 @@ function showCartReview() {
         const visibleTabs = tabsList.slice(0, maxVisibleTabs);
         tabsHtml = visibleTabs.map(t => `
             <button class="tab-button ${t.isActive ? 'active' : ''}" data-tab-id="${t.id}">
-                ${t.label} (${t.itemCount} items | KSh ${t.total.toFixed(2)})
+                ${t.label} (${t.itemCount})
                 <span class="tab-edit-icon" data-edit-tab-id="${t.id}" title="Edit name / Hariri jina">✎</span>
             </button>
         `).join('');
@@ -827,7 +1080,7 @@ function showCartReview() {
         const moreCount = tabsList.length - maxVisibleTabs;
         tabsHtml += `
             <button class="tab-more-btn" id="show-all-tabs-btn">
-                ▼ ${moreCount} more
+                ▼ +${moreCount} more
             </button>
         `;
     }
@@ -838,12 +1091,12 @@ function showCartReview() {
             <div style="
                 background: linear-gradient(135deg, #667eea, #764ba2);
                 color: white;
-                padding: 24px;
+                padding: 16px 20px;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
             ">
-                <h2 style="margin: 0; font-size: 24px; display: flex; align-items: center; gap: 10px;">
+                <h2 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px;">
                     <span>🛒</span>
                     <span>Your Cart / Kikapu Chako</span>
                 </h2>
@@ -851,38 +1104,27 @@ function showCartReview() {
                     background: rgba(255,255,255,0.2);
                     border: none;
                     color: white;
-                    width: 40px;
-                    height: 40px;
-                    border-radius: 10px;
-                    font-size: 24px;
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 8px;
+                    font-size: 18px;
                     cursor: pointer;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    transition: background 0.2s;
-                ">×</button>
+                ">✕</button>
             </div>
             
             <!-- Tab Switcher -->
-            <div class="tab-selector">
+            <div class="tab-selector" style="padding: 10px; gap: 6px;">
                 ${tabsHtml}
-                <button class="new-tab-btn" id="new-tab-btn">
-                    <span>➕</span> New Tab / Kichupo Kipya
+                <button class="new-tab-btn" id="new-tab-btn" style="padding: 6px 12px; font-size:12px;">
+                    <span>➕</span> New
                 </button>
             </div>
             
-            <!-- Active Tab Label -->
-            <div style="padding: 0 24px 8px;">
-                <span style="font-weight:600; color:#333;">${activeTab.label}</span>
-            </div>
-            
-            <!-- Items List -->
-            <div style="
-                flex: 1;
-                overflow-y: auto;
-                padding: 20px 24px;
-                max-height: 50vh;
-            ">
+            <!-- Items List - REDESIGNED FOR BETTER VISIBILITY -->
+            <div class="cart-items-container">
                 ${items.length === 0 ? `
                     <div style="text-align:center; color:#94a3b8; padding:30px;">
                         <p>No items in this tab. / Hakuna bidhaa kwenye kichupo hiki.</p>
@@ -892,98 +1134,30 @@ function showCartReview() {
                     const subtotal = price * item.quantity;
                     const itemName = item.display_name || item.name;
                     
-                    const typeBadge = item.type === 'selling_unit' 
-                        ? `<span style="background:#9b59b6;color:white;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:8px;">Selling Unit / Kitengo</span>`
-                        : `<span style="background:#3498db;color:white;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:8px;">Base Item / Kikuu</span>`;
-                    
-                    const batchInfo = item.batch_name ? `
-                        <div style="
-                            background: #e9ecef;
-                            color: #7950f2;
-                            font-size: 12px;
-                            padding: 2px 8px;
-                            border-radius: 4px;
-                            display: inline-block;
-                            margin-right: 8px;
-                        ">${item.batch_name}</div>
-                    ` : '';
-                    
-                    const smartIndicator = item._batch_switched ? `
-                        <div style="
-                            background: #ff9f43;
-                            color: white;
-                            font-size: 10px;
-                            padding: 2px 6px;
-                            border-radius: 4px;
-                            display: inline-block;
-                            margin-right: 8px;
-                        ">Auto-switched / Imegeuzwa</div>
-                    ` : '';
-                    
-                    const stockInfo = item.real_available !== undefined ? `
-                        <div style="font-size:11px;color:#666;margin-top:2px;">
-                            Real stock: ${item.real_available.toFixed(2)} / Stock halisi: ${item.real_available.toFixed(2)}
-                        </div>
-                    ` : '';
+                    // Determine badge type
+                    let badgeClass = 'badge-base';
+                    let badgeText = 'Base';
+                    if (item.type === 'selling_unit') {
+                        badgeClass = 'badge-unit';
+                        badgeText = 'Unit';
+                    } else if (item._batch_switched) {
+                        badgeClass = 'badge-switch';
+                        badgeText = 'Switched';
+                    }
                     
                     return `
-                        <div class="cart-item" style="
-                            padding: 16px;
-                            margin-bottom: 12px;
-                            background: #f8f9fa;
-                            border-radius: 12px;
-                            border: 1px solid #e9ecef;
-                            display: flex;
-                            justify-content: space-between;
-                            align-items: center;
-                            transition: transform 0.2s, box-shadow 0.2s;
-                        ">
-                            <div style="flex: 1;">
-                                <div style="
-                                    font-weight: 600;
-                                    color: #333;
-                                    font-size: 16px;
-                                    margin-bottom: 4px;
-                                    display: flex;
-                                    align-items: center;
-                                ">
-                                    ${itemName} ${typeBadge}
+                        <div class="cart-item">
+                            <div class="item-details">
+                                <div class="item-name">${itemName}</div>
+                                <div class="item-meta">
+                                    <span class="item-badge ${badgeClass}">${badgeText}</span>
+                                    ${item.batch_name ? `<span>📦 ${item.batch_name}</span>` : ''}
+                                    <span>KSh ${price.toFixed(2)} × ${item.quantity}</span>
                                 </div>
-                                <div style="
-                                    color: #666;
-                                    font-size: 14px;
-                                    margin-bottom: 4px;
-                                ">KSh ${price.toFixed(2)} × ${item.quantity}</div>
-                                ${batchInfo}
-                                ${smartIndicator}
-                                ${stockInfo}
                             </div>
-                            <div style="
-                                display: flex;
-                                align-items: center;
-                                gap: 16px;
-                            ">
-                                <div style="
-                                    font-weight: 700;
-                                    color: #2ed573;
-                                    font-size: 18px;
-                                ">
-                                    KSh ${subtotal.toFixed(2)}
-                                </div>
-                                <button onclick="window.cartIcon.removeItem('${activeTab.id}', ${index})" style="
-                                    background: #ff6b6b;
-                                    color: white;
-                                    border: none;
-                                    width: 36px;
-                                    height: 36px;
-                                    border-radius: 8px;
-                                    font-size: 20px;
-                                    cursor: pointer;
-                                    display: flex;
-                                    align-items: center;
-                                    justify-content: center;
-                                    transition: background 0.2s;
-                                ">×</button>
+                            <div class="item-price-section">
+                                <span class="item-subtotal">KSh ${subtotal.toFixed(2)}</span>
+                                <button class="remove-item-btn" onclick="window.cartIcon.removeItem('${activeTab.id}', ${index})">✕</button>
                             </div>
                         </div>
                     `;
@@ -991,58 +1165,25 @@ function showCartReview() {
             </div>
             
             <!-- Footer -->
-            <div style="
-                padding: 24px;
-                border-top: 2px solid #e9ecef;
-                background: #f8f9fa;
-            ">
-                <div style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 20px;
-                ">
-                    <div>
-                        <div style="font-size: 14px; color: #666; margin-bottom: 4px;">Total Amount / Jumla</div>
-                        <div style="font-size: 32px; font-weight: 800; color: #333;">KSh ${total.toFixed(2)}</div>
-                    </div>
-                    <button id="clear-tab-btn" style="
-                        padding: 12px 24px;
-                        background: #f8f9fa;
-                        border: 2px solid #ff6b6b;
-                        color: #ff6b6b;
-                        border-radius: 10px;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: all 0.2s;
-                    ">Clear Tab / Futa Kichupo</button>
+            <div class="cart-footer">
+                <div class="total-row">
+                    <span class="total-label">Total / Jumla</span>
+                    <span class="total-amount">KSh ${total.toFixed(2)}</span>
                 </div>
                 
-                <div style="display: flex; gap: 12px;">
-                    <button id="continue-shopping-btn" style="
-                        flex: 1;
-                        padding: 16px;
-                        background: #e9ecef;
-                        color: #666;
-                        border: none;
-                        border-radius: 12px;
-                        font-weight: 600;
-                        font-size: 16px;
-                        cursor: pointer;
-                        transition: background 0.2s;
-                    ">Continue Shopping / Endelea Kununua</button>
-                    <button id="checkout-btn" style="
-                        flex: 1;
-                        padding: 16px;
-                        background: linear-gradient(135deg, #2ed573, #1dd1a1);
-                        color: white;
-                        border: none;
-                        border-radius: 12px;
-                        font-weight: 600;
-                        font-size: 16px;
-                        cursor: pointer;
-                        transition: transform 0.2s, box-shadow 0.2s;
-                    ">Proceed to Checkout / Nenda Maliponi →</button>
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+                    <button id="clear-tab-btn" class="action-btn clear">
+                        Clear Tab / Futa
+                    </button>
+                </div>
+                
+                <div class="action-buttons">
+                    <button id="continue-shopping-btn" class="action-btn continue">
+                        ← Continue Shopping / Endelea
+                    </button>
+                    <button id="checkout-btn" class="action-btn checkout">
+                        Checkout → / Malipo
+                    </button>
                 </div>
             </div>
         </div>
@@ -1053,7 +1194,6 @@ function showCartReview() {
     // Add tab switcher event listeners
     document.querySelectorAll('.tab-button').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            // If the click was on the edit icon, ignore switching
             if (e.target.classList.contains('tab-edit-icon')) return;
             const tabId = btn.dataset.tabId;
             switchTab(tabId);
@@ -1081,7 +1221,6 @@ function showCartReview() {
     document.getElementById('new-tab-btn').addEventListener('click', () => {
         const active = getActiveTab();
         if (active.items.length === 0) {
-            // Current tab is empty – disallow creating a new empty tab
             showNotification('Current tab is empty. Please use it before creating a new one. / Kichupo cha sasa hakina bidhaa. Tafadhali kitumie kabla ya kuunda kipya.', 'warning', 3000);
         } else {
             createTab('');
@@ -1089,20 +1228,6 @@ function showCartReview() {
         modalBackdrop.remove();
         setTimeout(() => showCartReview(), 100);
     });
-    
-    setTimeout(() => {
-        const items = document.querySelectorAll('.cart-item');
-        items.forEach(item => {
-            item.onmouseenter = () => {
-                item.style.transform = 'translateY(-2px)';
-                item.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
-            };
-            item.onmouseleave = () => {
-                item.style.transform = 'translateY(0)';
-                item.style.boxShadow = 'none';
-            };
-        });
-    }, 100);
     
     // Event handlers
     document.getElementById('close-cart-btn').onclick = () => modalBackdrop.remove();
@@ -1159,81 +1284,53 @@ function showPaymentModal() {
             <div style="
                 background: linear-gradient(135deg, #1dd1a1, #10ac84);
                 color: white;
-                padding: 24px;
+                padding: 16px;
                 text-align: center;
             ">
-                <h2 style="margin: 0; font-size: 24px; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                <h2 style="margin: 0; font-size: 18px; display: flex; align-items: center; justify-content: center; gap: 8px;">
                     <span>💳</span>
                     <span>Complete Purchase / Maliza Ununuzi</span>
                 </h2>
-                <div style="margin-top: 16px; font-size: 14px; opacity: 0.9;">
+                <div style="margin-top: 8px; font-size: 13px; opacity: 0.9;">
                     Tab: ${getActiveTab().label}
                 </div>
             </div>
             
-            <div style="padding: 24px;">
-                <div style="text-align: center; margin-bottom: 24px;">
-                    <div style="font-size: 14px; color: #666; margin-bottom: 8px;">Total Amount / Jumla</div>
-                    <div style="font-size: 48px; font-weight: 800; color: #333; margin-bottom: 8px;" id="modal-total">
+            <div style="padding: 20px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Total Amount / Jumla</div>
+                    <div style="font-size: 36px; font-weight: 800; color: #333; margin-bottom: 4px;" id="modal-total">
                         KSh ${total.toFixed(2)}
                     </div>
-                    <div style="color: #666; font-size: 14px;">
-                        ${getActiveTab().items.length} item(s) • Smart batch tracking / Ufuatiliaji mahiri
+                    <div style="color: #666; font-size: 12px;">
+                        ${getActiveTab().items.length} item(s)
                     </div>
                 </div>
                 
                 <!-- Payment Method Selection -->
-                <div style="margin-bottom: 20px;">
-                    <div style="font-weight: 600; color: #333; margin-bottom: 12px;">
+                <div style="margin-bottom: 16px;">
+                    <div style="font-weight: 600; color: #333; margin-bottom: 8px; font-size:14px;">
                         Payment Method / Njia ya Malipo
-                        <span style="font-size: 12px; color: #666; margin-left: 8px;">(Tap to select / Bonyeza kuchagua)</span>
                     </div>
                     
                     <!-- Payment Method Grid -->
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px;">
                         <!-- Cash -->
-                        <div class="payment-option" data-method="cash" style="
-                            background: #f8f9fa;
-                            border: 2px solid #e9ecef;
-                            border-radius: 12px;
-                            padding: 15px 8px;
-                            text-align: center;
-                            cursor: pointer;
-                            transition: all 0.2s;
-                        ">
-                            <div style="font-size: 24px; margin-bottom: 5px;">💰</div>
-                            <div style="font-weight: 600; font-size: 14px;">Cash</div>
-                            <div style="font-size: 11px; color: #666;">Taslimu</div>
+                        <div class="payment-option" data-method="cash" style="padding: 10px 4px;">
+                            <div style="font-size: 20px;">💰</div>
+                            <div style="font-weight: 600; font-size: 12px;">Cash</div>
                         </div>
                         
-                        <!-- M-Pesa / Phone -->
-                        <div class="payment-option" data-method="mpesa" style="
-                            background: #f8f9fa;
-                            border: 2px solid #e9ecef;
-                            border-radius: 12px;
-                            padding: 15px 8px;
-                            text-align: center;
-                            cursor: pointer;
-                            transition: all 0.2s;
-                        ">
-                            <div style="font-size: 24px; margin-bottom: 5px;">📱</div>
-                            <div style="font-weight: 600; font-size: 14px;">M-Pesa</div>
-                            <div style="font-size: 11px; color: #666;">Phone</div>
+                        <!-- M-Pesa -->
+                        <div class="payment-option" data-method="mpesa" style="padding: 10px 4px;">
+                            <div style="font-size: 20px;">📱</div>
+                            <div style="font-weight: 600; font-size: 12px;">M-Pesa</div>
                         </div>
                         
                         <!-- Card -->
-                        <div class="payment-option" data-method="card" style="
-                            background: #f8f9fa;
-                            border: 2px solid #e9ecef;
-                            border-radius: 12px;
-                            padding: 15px 8px;
-                            text-align: center;
-                            cursor: pointer;
-                            transition: all 0.2s;
-                        ">
-                            <div style="font-size: 24px; margin-bottom: 5px;">💳</div>
-                            <div style="font-weight: 600; font-size: 14px;">Card</div>
-                            <div style="font-size: 11px; color: #666;">Kadi</div>
+                        <div class="payment-option" data-method="card" style="padding: 10px 4px;">
+                            <div style="font-size: 20px;">💳</div>
+                            <div style="font-weight: 600; font-size: 12px;">Card</div>
                         </div>
                     </div>
                     
@@ -1242,53 +1339,50 @@ function showPaymentModal() {
                         background: #f0f9ff;
                         border: 2px solid #3b82f6;
                         border-radius: 12px;
-                        padding: 15px;
-                        margin-top: 10px;
+                        padding: 12px;
+                        margin-top: 8px;
                         display: none;
                     ">
-                        <div style="font-weight: 600; color: #1e293b; margin-bottom: 10px;">
+                        <div style="font-weight: 600; color: #1e293b; margin-bottom: 8px; font-size:13px;">
                             Split Payment / Gawanya Malipo
                         </div>
                         
-                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
-                            <div style="flex: 1; min-width: 100px;">
-                                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Cash Amount</label>
-                                <input type="number" id="cash-amount" class="split-input" placeholder="0" min="0" value="0" step="0.01">
+                        <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 80px;">
+                                <input type="number" id="cash-amount" class="split-input" placeholder="Cash" min="0" value="0" step="0.01" style="padding:6px; font-size:12px;">
                             </div>
-                            <div style="flex: 1; min-width: 100px;">
-                                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">M-Pesa Amount</label>
-                                <input type="number" id="mpesa-amount" class="split-input" placeholder="0" min="0" value="0" step="0.01">
+                            <div style="flex: 1; min-width: 80px;">
+                                <input type="number" id="mpesa-amount" class="split-input" placeholder="M-Pesa" min="0" value="0" step="0.01" style="padding:6px; font-size:12px;">
                             </div>
-                            <div style="flex: 1; min-width: 100px;">
-                                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Card Amount</label>
-                                <input type="number" id="card-amount" class="split-input" placeholder="0" min="0" value="0" step="0.01">
+                            <div style="flex: 1; min-width: 80px;">
+                                <input type="number" id="card-amount" class="split-input" placeholder="Card" min="0" value="0" step="0.01" style="padding:6px; font-size:12px;">
                             </div>
                         </div>
                         
                         <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div style="font-size: 13px; color: #2563eb;">
-                                Total: <span id="split-total">0</span> / <span id="grand-total">${total.toFixed(2)}</span>
+                            <div style="font-size: 12px; color: #2563eb;">
+                                Total: <span id="split-total">0</span> / ${total.toFixed(2)}
                             </div>
                             <button id="apply-split" style="
                                 background: #3b82f6;
                                 color: white;
                                 border: none;
-                                padding: 8px 16px;
-                                border-radius: 8px;
-                                font-size: 13px;
+                                padding: 4px 12px;
+                                border-radius: 6px;
+                                font-size: 12px;
                                 font-weight: 600;
                                 cursor: pointer;
-                            ">Apply Split / Weka</button>
+                            ">Apply</button>
                         </div>
                     </div>
                     
                     <!-- Selected Payment Summary -->
                     <div id="payment-summary" style="
-                        margin-top: 15px;
-                        padding: 12px;
+                        margin-top: 12px;
+                        padding: 10px;
                         background: #e8f5e9;
                         border-radius: 8px;
-                        font-size: 13px;
+                        font-size: 12px;
                         color: #2e7d32;
                         display: none;
                     ">
@@ -1296,37 +1390,32 @@ function showPaymentModal() {
                     </div>
                 </div>
                 
-                <div style="display: flex; gap: 12px;">
+                <div style="display: flex; gap: 10px;">
                     <button id="back-to-cart-btn" style="
                         flex: 1;
-                        padding: 16px;
+                        padding: 12px;
                         background: #e9ecef;
                         color: #666;
                         border: none;
-                        border-radius: 12px;
+                        border-radius: 10px;
                         font-weight: 600;
-                        font-size: 16px;
+                        font-size: 14px;
                         cursor: pointer;
-                        transition: background 0.2s;
-                    ">← Back to Cart / Rudi Kwenye Kikapu</button>
+                    ">← Back</button>
                     <button id="complete-purchase-btn" style="
                         flex: 1;
-                        padding: 16px;
+                        padding: 12px;
                         background: linear-gradient(135deg, #2ed573, #1dd1a1);
                         color: white;
                         border: none;
-                        border-radius: 12px;
+                        border-radius: 10px;
                         font-weight: 600;
-                        font-size: 16px;
+                        font-size: 14px;
                         cursor: pointer;
-                        transition: transform 0.2s, box-shadow 0.2s;
                         opacity: 0.5;
                         pointer-events: none;
                     " disabled>
-                        <span style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                            <span>Complete Purchase / Maliza Ununuzi</span>
-                            <span>✅</span>
-                        </span>
+                        Complete
                     </button>
                 </div>
             </div>
@@ -1347,7 +1436,7 @@ function showPaymentModal() {
         const btn = document.getElementById('complete-purchase-btn');
         const originalText = btn.innerHTML;
         
-        btn.innerHTML = '<span>Processing... / Inashughulikia...</span>';
+        btn.innerHTML = 'Processing...';
         btn.disabled = true;
         
         try {
@@ -1485,7 +1574,7 @@ function updatePaymentSummary(total, summary, summaryText) {
     if (selectedPaymentMethods.length === 1) {
         const method = selectedPaymentMethods[0];
         const methodNames = { cash: '💰 Cash', mpesa: '📱 M-Pesa', card: '💳 Card' };
-        text = `${methodNames[method]} - Full payment / Malipo kamili`;
+        text = `${methodNames[method]} - Full payment`;
     } else {
         const parts = [];
         if (paymentSplit.cash > 0) parts.push(`💰 Cash: KSh ${paymentSplit.cash.toFixed(2)}`);
@@ -1943,17 +2032,27 @@ function removeCartItem(tabId, index) {
 document.addEventListener("DOMContentLoaded", () => {
     console.log('🛒 Smart Cart System (Multi‑Tab) Initializing...');
     
+    // First, aggressively remove any existing cart icons
+    removeExistingCartIcon();
+    
+    // Reset cart data to clear any lingering items
+    resetCartData();
+    
+    // Run removal again after a short delay
+    setTimeout(removeExistingCartIcon, 500);
+    
     loadTabsFromStorage();
-    updateCartIcon();
     
-    setTimeout(() => {
-        if (!document.getElementById('sales-cart-icon')) {
-            console.error('Cart icon not found - retrying...');
-            updateCartIcon();
-        }
-    }, 100);
+    // Force hide cart icon on page load regardless of cart count
+    const existingIcon = document.getElementById('sales-cart-icon');
+    if (existingIcon) {
+        existingIcon.style.display = 'none';
+    }
     
-    // Expose globally
+    // Don't create cart icon automatically - wait for user interaction
+    // Only create it when items are actually added via addItemToCart
+    
+    // Expose globally with hide/show functions
     window.cartIcon = {
         addItem: addItemToCart,
         getActiveTab: () => getActiveTab(),
@@ -1977,6 +2076,8 @@ document.addEventListener("DOMContentLoaded", () => {
         getCount: getCartCount,
         getTotal: getCartTotal,
         completeSale: completeSale,
+        hideIcon: hideCartIcon,
+        showIcon: showCartIcon,
         debug: () => {
             console.log('🛒 MULTI‑TAB DEBUG:', tabs);
         }
@@ -1987,19 +2088,13 @@ document.addEventListener("DOMContentLoaded", () => {
 ╔═══════════════════════════════════════════╗
 ║   🧠 MULTI‑TAB CART SYSTEM READY         ║
 ╠═══════════════════════════════════════════╣
-║ • Multiple tabs (pubs, clubs, tables)    ║
-║ • Auto‑named (Customer 1, 2, …)          ║
-║ • Edit labels with pencil ✎               ║
-║ • Prevents empty‑tab clutter              ║
-║ • Overflow: first 3 tabs + more modal    ║
-║ • Rename any tab, even hidden            ║
-║ • Currency: KSh (Kenyan Shillings)       ║
-║ • Smart batch tracking                    ║
-║ • Frontend sale processing                ║
-║ • Error recovery & rollback               ║
-║ • Multi‑payment methods                   ║
-║   (Cash, M-Pesa, Card, Split)             ║
-║ • No backend required!                    ║
+║ • Multiple tabs                          ║
+║ • Redesigned compact UI                   ║
+║ • Items now clearly visible               ║
+║ • Better spacing & typography             ║
+║ • Currency: KSh                          ║
+║ • Multi-payment methods                   ║
+║ • Cart icon only appears with items      ║
 ╚═══════════════════════════════════════════╝
 `);
 });

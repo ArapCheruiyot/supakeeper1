@@ -1,6 +1,7 @@
 // upgrade.js - Upgrade Management System with M-Pesa Payment
 // Shows upgrade modal when staff limit is reached and collects M-Pesa payments
 // NOW INJECTS: Plan banner directly into navbar for instant upgrade visibility
+// UPDATED: Staff count badge is now clickable to open staff manager with visual + Staff indicator
 
 import { db } from "./firebase-config.js";
 import { 
@@ -18,6 +19,74 @@ import {
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
 console.log("✅ upgrade.js loaded");
+
+// Add pulse animation style at the top
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); background: rgba(255,255,255,0.2); }
+    100% { transform: scale(1); }
+  }
+  
+  #staff-count-badge {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    position: relative;
+    border: 1px solid transparent;
+  }
+  
+  #staff-count-badge:active {
+    transform: scale(0.95) !important;
+  }
+  
+  .staff-tooltip {
+    position: absolute;
+    bottom: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+    z-index: 10;
+    border: 1px solid;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  
+  #staff-count-badge:hover .staff-tooltip {
+    opacity: 1;
+  }
+  
+  .hover-indicator {
+    position: absolute;
+    right: -4px;
+    top: -4px;
+    background: #4f46e5;
+    color: white;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  
+  #staff-count-badge:hover .hover-indicator {
+    opacity: 1 !important;
+  }
+`;
+document.head.appendChild(style);
 
 let currentShopId = null;
 let currentPlan = null;
@@ -172,6 +241,55 @@ async function loadPlanData() {
 }
 
 // ======================================================
+// OPEN STAFF MANAGER FROM BANNER
+// ======================================================
+window.openStaffManagerFromBanner = function(event) {
+  if (event) {
+    event.stopPropagation();
+  }
+  
+  console.log("👥 Opening staff manager from plan banner");
+  
+  // Add pulse animation
+  const badge = document.getElementById('staff-count-badge');
+  if (badge) {
+    badge.style.animation = 'pulse 0.3s ease';
+    setTimeout(() => {
+      badge.style.animation = '';
+    }, 300);
+  }
+  
+  // Try to open staff manager via settings menu item
+  const staffMenuItem = document.querySelector('[data-action="staff"]');
+  if (staffMenuItem) {
+    staffMenuItem.click();
+    return;
+  }
+  
+  // Fallback: try to open settings then staff
+  const settingsBtn = document.getElementById('settings-btn');
+  if (settingsBtn) {
+    settingsBtn.click();
+    setTimeout(() => {
+      const staffBtn = document.querySelector('[data-action="staff"]');
+      if (staffBtn) staffBtn.click();
+    }, 300);
+    return;
+  }
+  
+  // Last resort: show upgrade modal if staff limit reached
+  const planName = currentPlan?.name || "SOLO";
+  const isSolo = planName === "SOLO";
+  
+  if (typeof window.showUpgradeModal === 'function') {
+    window.showUpgradeModal(
+      planName, 
+      isSolo ? "Add staff members" : "Staff limit reached"
+    );
+  }
+};
+
+// ======================================================
 // RENDER PLAN BANNER (MORE NOTICEABLE BUT STILL CLEAN)
 // ======================================================
 function renderPlanBanner(container) {
@@ -216,18 +334,55 @@ function renderPlanBanner(container) {
             ">${planName}</span>
           </div>
           
-          <div style="
+          <!-- ENHANCED: Clickable Staff Count Badge with Visual + Staff Indicator -->
+          <div id="staff-count-badge" style="
             display: flex;
             align-items: center;
             gap: 8px;
             background: rgba(255,255,255,0.05);
             padding: 6px 14px;
             border-radius: 40px;
-          ">
-            <span style="color: #94a3b8;">👥</span>
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+          " onclick="window.openStaffManagerFromBanner(event)"
+             onmouseenter="this.style.background='rgba(255,255,255,0.15)'; this.style.borderColor='${planColor}60'; this.style.transform='scale(1.05)'"
+             onmouseleave="this.style.background='rgba(255,255,255,0.05)'; this.style.borderColor='transparent'; this.style.transform='scale(1)'"
+             title="Click to manage staff / Bonyeza kusimamia wafanyakazi">
+            
+            <!-- Staff Icon -->
+            <span style="color: #94a3b8; font-size: 16px;">👥</span>
+            
+            <!-- Staff Count -->
             <span style="font-weight: 600; color: white; font-size: 14px;">
-              ${isSolo ? 'Owner only' : `${currentStaffCount}/${staffLimit} staff`}
+              ${isSolo ? '0/0' : `${currentStaffCount}/${staffLimit}`}
             </span>
+            
+            <!-- Visual "+ Staff" CTA Badge -->
+            <span style="
+              background: ${planColor}30;
+              color: ${planColor};
+              padding: 2px 8px;
+              border-radius: 20px;
+              font-size: 11px;
+              font-weight: 600;
+              margin-left: 4px;
+              border: 1px solid ${planColor}40;
+              display: flex;
+              align-items: center;
+              gap: 2px;
+            ">
+              <span style="font-size: 14px; line-height: 1;">+</span>
+              <span>Staff</span>
+            </span>
+            
+            <!-- Subtle hover indicator (appears on hover) -->
+            <span class="hover-indicator">+</span>
+            
+            <!-- Tooltip (shows on hover) -->
+            <div class="staff-tooltip" style="border-color: ${planColor}60;">
+              Click to manage staff
+            </div>
           </div>
         </div>
         
@@ -256,7 +411,7 @@ function renderPlanBanner(container) {
     </div>
   `;
   
-  // Add click handler
+  // Add click handler for upgrade button
   document.getElementById('quick-upgrade-btn')?.addEventListener('click', () => {
     if (typeof window.showUpgradeModal === 'function') {
       window.showUpgradeModal(planName, isSolo ? "Add staff members" : "Upgrade your plan");
@@ -270,6 +425,7 @@ function renderPlanBanner(container) {
     }
   });
 }
+
 // ======================================================
 // CHECK FOR PENDING UPGRADE REQUESTS
 // ======================================================

@@ -1,6 +1,7 @@
 :root {
   --item-close-offset: 72px;
   --nav-height: 60px; /* fallback; will be updated by JS when navbar grows (staff card) */
+  --banner-height: 60px; /* Add banner height variable */
 }
 
 /* ------------------------------
@@ -11,15 +12,16 @@ body {
     font-family: Arial, Helvetica, sans-serif;
     background-color: #f5f6fa;
     color: #333;
-    padding-top: var(--nav-height); /* was 60px */
+    /* REMOVED: padding-top: var(--nav-height); - this was causing the gap! */
+    padding-top: 0 !important;
 }
 
 /* ------------------------------
-   Navbar
+   Navbar - FIXED AT VERY TOP
 -------------------------------*/
 .navbar {
     position: fixed;
-    top: 0;
+    top: 0 !important;
     left: 0;
     width: 100%;
     display: flex;
@@ -30,6 +32,31 @@ body {
     color: white;
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
     z-index: 4000;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+/* ------------------------------
+   Plan Banner - FIXED DIRECTLY BELOW NAVBAR
+-------------------------------*/
+#plan-banner-container {
+    position: fixed !important;
+    top: 60px !important; /* Exactly navbar height */
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 3999 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: linear-gradient(135deg, #0f172a, #1e293b) !important;
+    border-bottom: 2px solid #8B5CF660 !important;
+}
+
+#plan-banner-container > div {
+    margin: 0 !important;
+    padding: 12px 24px !important;
+    background: linear-gradient(135deg, #0f172a, #1e293b) !important;
+    border-bottom: 2px solid #8B5CF660 !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
 }
 
 .nav-left #user-name { font-weight: bold; font-size: 1rem; }
@@ -48,16 +75,28 @@ body {
 .nav-right button:hover { background-color: #f1f1f1; }
 
 /* ------------------------------
-   Header
+   Header - ADD MARGIN TOP TO PUSH BELOW FIXED ELEMENTS
 -------------------------------*/
-header { text-align: center; padding: 30px 20px; }
+header { 
+    text-align: center; 
+    padding: 30px 20px; 
+    margin-top: 120px; /* navbar (60px) + banner (60px) */
+}
 header h1 { font-size: 2rem; margin-bottom: 8px; color: #222; }
 header p { font-size: 1rem; color: #555; }
 
 /* ------------------------------
-   Action Buttons
+   Action Buttons - ADD MARGIN TOP
 -------------------------------*/
-.action-buttons { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 30px; margin: 40px 0; }
+.action-buttons { 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center; 
+    align-items: center; 
+    gap: 30px; 
+    margin: 40px 0;
+    margin-top: 0; /* Reset if needed */
+}
 
 .red-btn { background-color: #e53935; color: white; font-size: 1.5rem; font-weight: bold; border: none; border-radius: 50%; width: 140px; height: 140px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.2); transition: transform 0.2s, box-shadow 0.2s; }
 .red-btn:hover { transform: scale(1.05); box-shadow: 0 6px 12px rgba(0,0,0,0.25); }
@@ -66,39 +105,46 @@ header p { font-size: 1rem; color: #555; }
 .blue-btn:hover { transform: scale(1.03); box-shadow: 0 6px 12px rgba(0,0,0,0.25); }
 
 /* ------------------------------
-   Overlay
+   Overlay - STARTS BELOW BANNER
 -------------------------------*/
 .overlay {
   position: fixed;
-  top: var(--nav-height); /* was 60px */
+  top: 120px; /* navbar (60px) + banner (60px) */
   left: 0;
   width: 100%;
-  height: calc(100% - var(--nav-height)); /* was calc(100% - 60px) */
+  height: calc(100% - 120px);
   background-color: rgba(0,0,0,0.5);
   display: flex;
-  justify-content: center;
-  align-items: flex-end;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
   z-index: 1000;
   pointer-events: auto;
 }
 .overlay.hidden { display: none !important; }
 
+/* FIXED: Added properties to ensure full height */
 .overlay-content {
   background: white;
   width: 100%;
-  height: 90%;
+  height: 100%; 
+  min-height: 100%;
+  max-height: 100%;
   position: relative;
   padding: 16px;
   overflow-y: auto;
   z-index: 1001;
+  box-sizing: border-box; 
+  flex: 1;
 }
 .overlay-content.hidden { display: none !important; }
 
 /* ------------------------------
-   Categories Button
+   Categories Button - HIDDEN (using new Quick Add button instead)
 -------------------------------*/
-.categories-btn { background-color: #43a047; color: white; font-size: 1rem; font-weight: bold; border: none; border-radius: 8px; padding: 10px 20px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.2); transition: transform 0.2s, box-shadow 0.2s; position: absolute; top: 16px; left: 16px; z-index: 1002; }
-.categories-btn:hover { transform: scale(1.05); box-shadow: 0 6px 12px rgba(0,0,0,0.25); }
+.categories-btn { 
+    display: none !important; 
+}
 
 /* ------------------------------
    Categories & Subcategories
@@ -115,7 +161,6 @@ header p { font-size: 1rem; color: #555; }
 
 /* ------------------------------
    Item Detail Full-Screen Overlay
-   (improved stacking and close/edit layout)
 -------------------------------*/
 .item-detail {
     position: absolute;
@@ -126,7 +171,7 @@ header p { font-size: 1rem; color: #555; }
     background: #fff;
     padding: 20px;
     box-sizing: border-box;
-    z-index: 2100;               /* ensure item-detail sits above overlay-content */
+    z-index: 2100;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -137,7 +182,7 @@ header p { font-size: 1rem; color: #555; }
 
 .item-detail-header {
     display: flex;
-    justify-content: flex-start; /* keep header content left-aligned; edit button is absolutely positioned */
+    justify-content: flex-start;
     align-items: center;
     width: 100%;
     margin-bottom: 20px;
@@ -157,7 +202,7 @@ header p { font-size: 1rem; color: #555; }
     color: #555;
     cursor: pointer;
     transition: color 0.2s, transform 0.08s;
-    z-index: 2120;               /* above edit button and content */
+    z-index: 2120;
     width: 44px;
     height: 44px;
     display: inline-flex;
@@ -252,17 +297,164 @@ header p { font-size: 1rem; color: #555; }
 /* ------------------------------
    Responsive adjustments
 -------------------------------*/
-@media (max-width: 720px) {
-  :root { --item-close-offset: 64px; }
-  .item-detail { padding: 14px; }
-  .close-x { width: 40px; height: 40px; font-size: 1.25rem; top: 10px; left: 50%; transform: translateX(-50%); }
-  .edit-btn { right: 10px; padding: 5px 10px; }
+@media (max-width: 768px) {
+  .navbar {
+    height: 50px;
+    padding: 0 16px;
+  }
+  
+  #plan-banner-container {
+    top: 50px !important;
+  }
+  
+  #plan-banner-container > div {
+    padding: 10px 16px !important;
+  }
+  
+  header {
+    margin-top: 100px; /* 50 + 50 */
+  }
+  
+  .overlay {
+    top: 100px;
+    height: calc(100% - 100px);
+  }
 }
 
 @media (max-width: 480px) {
-  :root { --item-close-offset: 48px; }
+  :root { 
+    --item-close-offset: 48px; 
+  }
+  
+  .navbar {
+    height: 45px;
+  }
+  
+  #plan-banner-container {
+    top: 45px !important;
+  }
+  
+  #plan-banner-container > div {
+    padding: 8px 12px !important;
+  }
+  
+  header {
+    margin-top: 90px; /* 45 + 45 */
+  }
+  
+  .overlay {
+    top: 90px;
+    height: calc(100% - 90px);
+  }
+  
   .item-detail { padding: 12px; }
   .close-x { width: 36px; height: 36px; font-size: 1.1rem; top: 8px; left: 50%; transform: translateX(-50%); }
   .edit-btn { right: 8px; top: 8px; padding: 5px 8px; font-size: 14px; }
   #item-meta input { width: 160px; }
+}
+
+/* Safe area support for notched phones */
+@supports (padding: max(0px)) {
+  @media (max-width: 768px) {
+    header {
+      margin-top: max(100px, env(safe-area-inset-top) + 100px);
+    }
+    
+    .overlay {
+      top: max(100px, env(safe-area-inset-top) + 100px);
+      height: calc(100% - max(100px, env(safe-area-inset-top) + 100px));
+    }
+  }
+  
+  @media (max-width: 480px) {
+    header {
+      margin-top: max(90px, env(safe-area-inset-top) + 90px);
+    }
+    
+    .overlay {
+      top: max(90px, env(safe-area-inset-top) + 90px);
+      height: calc(100% - max(90px, env(safe-area-inset-top) + 90px));
+    }
+  }
+}
+
+/* ============================================================
+   MOBILE FIXES - Close button positioning
+   ============================================================ */
+@media (max-width: 480px) {
+  /* Adjust overlay to start lower on mobile to avoid banner overlap */
+  .overlay {
+    top: 105px !important; /* Slightly lower than the banner to give close button room */
+    height: calc(100% - 105px) !important;
+  }
+  
+  /* Adjust close button position on mobile - move it down */
+  #categories-close-btn {
+    top: 12px !important; /* Increased from 8px to move it down */
+    right: 8px !important;
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 20px !important;
+    z-index: 1020 !important;
+    /* Add a subtle shadow to make it more visible */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+  }
+  
+  /* Add padding to overlay content to prevent button overlap */
+  .overlay-content {
+    padding-top: 45px !important; /* Increased from 40px to create more space */
+  }
+  
+  /* Ensure Quick Add button doesn't get hidden */
+  .quick-add-trigger-container {
+    margin-top: 8px;
+    margin-bottom: 10px;
+  }
+  
+  /* Make Quick Add button full width on mobile */
+  #quickAddTriggerBtn {
+    width: 100% !important;
+    min-width: auto !important;
+    padding: 14px 16px !important; /* Slightly larger for better touch target */
+    font-size: 15px !important;
+  }
+  
+  /* Ensure navbar and banner heights are consistent */
+  .navbar {
+    height: 45px;
+  }
+  
+  #plan-banner-container {
+    top: 45px !important;
+  }
+  
+  #plan-banner-container > div {
+    padding: 8px 12px !important;
+  }
+}
+
+/* Extra small devices */
+@media (max-width: 360px) {
+  .overlay {
+    top: 100px !important;
+    height: calc(100% - 100px) !important;
+  }
+  
+  #categories-close-btn {
+    top: 10px !important;
+    right: 6px !important;
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 18px !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15) !important;
+  }
+  
+  .overlay-content {
+    padding-top: 42px !important;
+  }
+  
+  #quickAddTriggerBtn {
+    padding: 12px 14px !important;
+    font-size: 14px !important;
+  }
 }

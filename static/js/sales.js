@@ -5,6 +5,11 @@
 // AUDIO FIX: Added beep sound when user taps an item
 // CURRENCY: Changed from $ to KSh for Kenyan market
 // RESPONSIVE FIX: Added mobile-optimized badge positioning + compact card styles
+// CART ICON FIX: Hide floating cart when sales overlay opens, show when closed
+// CLOSE BUTTON FIX: Ensure close button is visible and not hidden under banner
+// PERFORMANCE FIX #1: Immediate cache invalidation after adding items
+// PERFORMANCE FIX #2: Hybrid search (instant local + background backend)
+// PERFORMANCE FIX #3: Pre-warm backend connection on overlay open
 
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { db } from "./firebase-config.js";
@@ -20,11 +25,16 @@ let currentUser = null;
 let useBackend = true; // Try backend first, fallback to local search
 let lastSearchResults = []; // Store last search results for persistence
 let lastSearchQuery = ''; // Store last search query
+let localItemCache = new Map(); // Local cache of items for instant search
+let isBackendReady = false; // Track if backend is warmed up
+let pendingInvalidations = new Set(); // Track items that need cache refresh
 
 // Audio for beep sound
 let beepAudio = null;
 
-const NAV_HEIGHT = 64;
+const NAV_HEIGHT = 60; // Navbar height
+const BANNER_HEIGHT = 60; // Banner height
+const TOTAL_TOP_OFFSET = NAV_HEIGHT + BANNER_HEIGHT; // 120px total
 
 // ====================================================
 // RESPONSIVE STYLES - ADDED FOR MOBILE OPTIMIZATION
@@ -122,6 +132,295 @@ const NAV_HEIGHT = 64;
         document.head.appendChild(style);
     }
 })();
+
+// ====================================================
+// PERFORMANCE FIX: Warm up backend connection
+// ====================================================
+async function warmUpBackend() {
+    if (!currentShopId) return;
+    
+    try {
+        console.log('🔥 Warming up backend connection...');
+        const startTime = Date.now();
+        
+        // Send a lightweight warm-up request
+        await fetch(`${FLASK_BACKEND_URL}/sales`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+                query: "warmup", 
+                shop_id: currentShopId,
+                warmup: true // Optional: backend can ignore this request
+            }),
+            // Short timeout for warmup
+            signal: AbortSignal.timeout(2000)
+        }).catch(() => {}); // Ignore errors during warmup
+        
+        isBackendReady = true;
+        console.log(`✅ Backend warmed up in ${Date.now() - startTime}ms`);
+    } catch (error) {
+        console.log('⚠️ Backend warmup failed, will use local search:', error);
+        isBackendReady = false;
+    }
+}
+
+// ====================================================
+// PERFORMANCE FIX: Build local item cache
+// ====================================================
+async function buildLocalItemCache(shopId) {
+    try {
+        console.log('📦 Building local item cache...');
+        const startTime = Date.now();
+        
+        const cache = new Map();
+        
+        // Get all categories
+        const categoriesRef = collection(db, "Shops", shopId, "categories");
+        const categoriesSnap = await getDocs(categoriesRef);
+        
+        for (const categoryDoc of categoriesSnap.docs) {
+            const categoryId = categoryDoc.id;
+            const categoryData = categoryDoc.data();
+            
+            // Get items in this category
+            const itemsRef = collection(db, "Shops", shopId, "categories", categoryId, "items");
+            const itemsSnap = await getDocs(itemsRef);
+            
+            for (const itemDoc of itemsSnap.docs) {
+                const itemData = itemDoc.data();
+                const itemName = (itemData.name || "").toLowerCase();
+                
+                // Cache main item
+                const mainItem = {
+                    item_id: itemDoc.id,
+                    main_item_id: itemDoc.id,
+                    category_id: categoryId,
+                    category_name: categoryData.name || "Uncategorized",
+                    name: itemData.name,
+                    type: "main_item",
+                    price: itemData.sellPrice || itemData.price || 0,
+                    sellPrice: itemData.sellPrice || itemData.price || 0,
+                    batch_id: itemData.currentBatchId || "default",
+                    batch_remaining: itemData.stock || 0,
+                    batch_name: "Current Stock",
+                    stock: itemData.stock || 0,
+                    thumbnail: itemData.images?.[0] || null,
+                    batch_status: "active"
+                };
+                
+                // Cache by name and ID for quick lookup
+                cache.set(itemDoc.id, mainItem);
+                
+                // Also cache selling units
+                const sellUnitsRef = collection(db, "Shops", shopId, "categories", categoryId, "items", itemDoc.id, "sellUnits");
+                const sellUnitsSnap = await getDocs(sellUnitsRef);
+                
+                sellUnitsSnap.forEach(sellDoc => {
+                    const sellData = sellDoc.data();
+                    const sellUnitItem = {
+                        item_id: itemDoc.id,
+                        sell_unit_id: sellDoc.id,
+                        main_item_id: itemDoc.id,
+                        category_id: categoryId,
+                        category_name: categoryData.name || "Uncategorized",
+                        name: sellData.name,
+                        display_name: sellData.name,
+                        type: "selling_unit",
+                        price: sellData.sellPrice || 0,
+                        sellPrice: sellData.sellPrice || 0,
+                        batch_id: "default",
+                        batch_remaining: sellData.stock || 0,
+                        available_stock: sellData.stock || 0,
+                        batch_name: "Selling Unit",
+                        stock: sellData.stock || 0,
+                        thumbnail: sellData.images?.[0]?.thumb || sellData.images?.[0]?.url || null,
+                        conversion_factor: sellData.conversionFactor || sellData.conversion || 1,
+                        batch_status: "active"
+                    };
+                    
+                    cache.set(`${itemDoc.id}_${sellDoc.id}`, sellUnitItem);
+                });
+            }
+        }
+        
+        localItemCache = cache;
+        console.log(`✅ Local cache built with ${cache.size} items in ${Date.now() - startTime}ms`);
+        return true;
+    } catch (error) {
+        console.error('❌ Error building local cache:', error);
+        return false;
+    }
+}
+
+// ====================================================
+// PERFORMANCE FIX: Immediate local search
+// ====================================================
+function searchLocalCache(query) {
+    const searchTerm = query.toLowerCase().trim();
+    if (!searchTerm || searchTerm.length < 2) return [];
+    
+    const startTime = Date.now();
+    const results = [];
+    
+    for (const item of localItemCache.values()) {
+        const itemName = (item.name || "").toLowerCase();
+        const displayName = (item.display_name || "").toLowerCase();
+        
+        // Score the match
+        let score = 0;
+        if (itemName === searchTerm) score = 100;
+        else if (itemName.startsWith(searchTerm)) score = 90;
+        else if (itemName.includes(` ${searchTerm}`)) score = 80;
+        else if (itemName.includes(searchTerm)) score = 70;
+        else if (displayName.includes(searchTerm)) score = 60;
+        
+        if (score > 0) {
+            results.push({
+                ...item,
+                search_score: score,
+                _from_cache: true
+            });
+        }
+    }
+    
+    // Sort by score
+    results.sort((a, b) => (b.search_score || 0) - (a.search_score || 0));
+    
+    console.log(`🔍 Local cache search found ${results.length} results in ${Date.now() - startTime}ms`);
+    return results;
+}
+
+// ====================================================
+// PERFORMANCE FIX: Immediate item invalidation
+// ====================================================
+function invalidateItemFromCache(itemId, sellUnitId = null) {
+    const key = sellUnitId ? `${itemId}_${sellUnitId}` : itemId;
+    
+    // Remove from local cache
+    localItemCache.delete(key);
+    
+    // Track for backend refresh
+    pendingInvalidations.add(key);
+    
+    console.log(`🔄 Invalidated item from cache: ${key}`);
+    
+    // Trigger a background refresh of the full cache
+    debouncedRefreshBackendCache();
+    
+    // Also try to rebuild just this item
+    rebuildSingleItem(itemId, sellUnitId);
+}
+
+async function rebuildSingleItem(itemId, sellUnitId = null) {
+    if (!currentShopId) return;
+    
+    try {
+        // Find the item in Firestore and rebuild cache entry
+        const categoriesRef = collection(db, "Shops", currentShopId, "categories");
+        const categoriesSnap = await getDocs(categoriesRef);
+        
+        for (const categoryDoc of categoriesSnap.docs) {
+            const categoryId = categoryDoc.id;
+            const categoryData = categoryDoc.data();
+            
+            const itemRef = doc(db, "Shops", currentShopId, "categories", categoryId, "items", itemId);
+            const itemDoc = await getDoc(itemRef);
+            
+            if (itemDoc.exists()) {
+                const itemData = itemDoc.data();
+                
+                if (!sellUnitId) {
+                    // Rebuild main item
+                    const mainItem = {
+                        item_id: itemDoc.id,
+                        main_item_id: itemDoc.id,
+                        category_id: categoryId,
+                        category_name: categoryData.name || "Uncategorized",
+                        name: itemData.name,
+                        type: "main_item",
+                        price: itemData.sellPrice || itemData.price || 0,
+                        sellPrice: itemData.sellPrice || itemData.price || 0,
+                        batch_id: itemData.currentBatchId || "default",
+                        batch_remaining: itemData.stock || 0,
+                        batch_name: "Current Stock",
+                        stock: itemData.stock || 0,
+                        thumbnail: itemData.images?.[0] || null,
+                        batch_status: "active"
+                    };
+                    
+                    localItemCache.set(itemId, mainItem);
+                    console.log(`✅ Rebuilt main item cache: ${itemId}`);
+                } else {
+                    // Rebuild selling unit
+                    const sellUnitRef = doc(itemRef, "sellUnits", sellUnitId);
+                    const sellUnitDoc = await getDoc(sellUnitRef);
+                    
+                    if (sellUnitDoc.exists()) {
+                        const sellData = sellUnitDoc.data();
+                        const sellUnitItem = {
+                            item_id: itemId,
+                            sell_unit_id: sellUnitDoc.id,
+                            main_item_id: itemId,
+                            category_id: categoryId,
+                            category_name: categoryData.name || "Uncategorized",
+                            name: sellData.name,
+                            display_name: sellData.name,
+                            type: "selling_unit",
+                            price: sellData.sellPrice || 0,
+                            sellPrice: sellData.sellPrice || 0,
+                            batch_id: "default",
+                            batch_remaining: sellData.stock || 0,
+                            available_stock: sellData.stock || 0,
+                            batch_name: "Selling Unit",
+                            stock: sellData.stock || 0,
+                            thumbnail: sellData.images?.[0]?.thumb || sellData.images?.[0]?.url || null,
+                            conversion_factor: sellData.conversionFactor || sellData.conversion || 1,
+                            batch_status: "active"
+                        };
+                        
+                        localItemCache.set(`${itemId}_${sellUnitId}`, sellUnitItem);
+                        console.log(`✅ Rebuilt selling unit cache: ${itemId}_${sellUnitId}`);
+                    }
+                }
+                break;
+            }
+        }
+        
+        // Remove from pending
+        const key = sellUnitId ? `${itemId}_${sellUnitId}` : itemId;
+        pendingInvalidations.delete(key);
+        
+    } catch (error) {
+        console.error('❌ Error rebuilding item:', error);
+    }
+}
+
+// ====================================================
+// PERFORMANCE FIX: Debounced backend cache refresh
+// ====================================================
+let refreshTimeout = null;
+function debouncedRefreshBackendCache() {
+    if (refreshTimeout) {
+        clearTimeout(refreshTimeout);
+    }
+    
+    refreshTimeout = setTimeout(async () => {
+        console.log('🔄 Debounced: Refreshing backend cache...');
+        try {
+            // Call backend to invalidate its cache
+            await fetch(`${FLASK_BACKEND_URL}/debug/refresh-cache`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" }
+            });
+            console.log('✅ Backend cache refreshed');
+        } catch (error) {
+            console.log('⚠️ Could not refresh backend cache:', error);
+        }
+        
+        // Clear pending invalidations
+        pendingInvalidations.clear();
+    }, 2000); // 2 second delay to batch multiple updates
+}
 
 // ====================================================
 // AUDIO HELPER FUNCTIONS - BEEP SOUND
@@ -629,7 +928,7 @@ function canAddToCart(item) {
 }
 
 // ====================================================
-// ONE-TAP ITEM HANDLER - FIXED WITH SEPARATE CART ENTRIES + BEEP SOUND
+// ONE-TAP ITEM HANDLER - FIXED WITH SEPARATE CART ENTRIES + BEEP SOUND + CACHE INVALIDATION
 // ====================================================
 
 async function handleOneTap(item) {
@@ -775,6 +1074,10 @@ async function handleOneTap(item) {
         const success = window.cartIcon.addItem(enrichedItem);
         
         if (success) {
+            // ✅ PERFORMANCE FIX: Immediately invalidate this item from cache
+            // This ensures the item appears instantly in next search
+            invalidateItemFromCache(enrichedItem.item_id, enrichedItem.sell_unit_id);
+            
             // Show success notification
             let successMsg = `Added 1 × ${item.name} / Umeongeza 1 × ${item.name}`;
             if (action === 'switch_and_add') {
@@ -878,7 +1181,64 @@ function showNotification(message, type = 'info', duration = 3000) {
 }
 
 // ====================================================
-// SALES OVERLAY (ONE-TAP VERSION) - COMPACT HEADER DESIGN
+// HELPER FUNCTION TO UPDATE CART ICON IN OVERLAY
+// ====================================================
+
+function updateOverlayCartIcon() {
+    const cartIconContainer = document.getElementById('sales-overlay-cart');
+    if (!cartIconContainer || !window.cartIcon) return;
+    
+    const count = window.cartIcon.getCount ? window.cartIcon.getCount() : 0;
+    const total = window.cartIcon.getTotal ? window.cartIcon.getTotal() : 0;
+    const tabsCount = window.cartIcon.getTabsList ? window.cartIcon.getTabsList().length : 1;
+    
+    cartIconContainer.innerHTML = `
+        <div style="
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            border: 1px solid rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        ">
+            🛒 ${count} | KSh ${total.toFixed(2)}
+            <span style="
+                background: rgba(255,255,255,0.2);
+                padding: 2px 8px;
+                border-radius: 20px;
+                font-size: 11px;
+            ">${tabsCount} tab${tabsCount !== 1 ? 's' : ''}</span>
+        </div>
+    `;
+    
+    const cartElement = cartIconContainer.firstElementChild;
+    cartElement.onclick = (e) => {
+        e.stopPropagation();
+        if (window.cartIcon && window.cartIcon.showCart) {
+            window.cartIcon.showCart();
+        }
+    };
+    
+    cartElement.onmouseenter = () => {
+        cartElement.style.transform = 'scale(1.05)';
+        cartElement.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.5)';
+    };
+    
+    cartElement.onmouseleave = () => {
+        cartElement.style.transform = 'scale(1)';
+        cartElement.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.3)';
+    };
+}
+
+// ====================================================
+// SALES OVERLAY (ONE-TAP VERSION) - COMPACT HEADER DESIGN WITH CART ICON
 // ====================================================
 
 function createSalesOverlay() {
@@ -888,10 +1248,10 @@ function createSalesOverlay() {
     salesOverlay.id = "sales-overlay";
     salesOverlay.style.cssText = `
         position: fixed;
-        top: ${NAV_HEIGHT}px;
+        top: ${TOTAL_TOP_OFFSET}px; /* Navbar (60px) + Banner (60px) = 120px */
         left: 0;
         width: 100%;
-        height: calc(100vh - ${NAV_HEIGHT}px);
+        height: calc(100vh - ${TOTAL_TOP_OFFSET}px);
         background: #f8fafc;
         z-index: 2000;
         display: none;
@@ -901,7 +1261,7 @@ function createSalesOverlay() {
     `;
 
     salesOverlay.innerHTML = `
-        <!-- Header - Compact design to maximize space for items -->
+        <!-- Header - Compact design with cart icon integrated -->
         <div style="
             background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
             color: white;
@@ -909,27 +1269,30 @@ function createSalesOverlay() {
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             flex-shrink:0;
             border-bottom: 1px solid rgba(255,255,255,0.1);
+            position: relative;
+            z-index: 2001;
         ">
-            <!-- Title row with close button only -->
+            <!-- Title row with close button -->
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                 <h1 style="margin:0; font-size:20px; font-weight:600; display:flex; align-items:center; gap:6px;">
                     <span style="font-size:22px;">🛍️</span>
                     <span>One-Tap Sale</span>
                 </h1>
                 <button id="close-sales" style="
-                    background: rgba(255,255,255,0.1);
-                    border: 1px solid rgba(255,255,255,0.2);
+                    background: rgba(255,255,255,0.2);
+                    border: 1px solid rgba(255,255,255,0.3);
                     color: white;
-                    width: 36px;
-                    height: 36px;
-                    border-radius: 10px;
-                    font-size: 22px;
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 20px;
+                    font-size: 24px;
                     cursor: pointer;
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     transition: all 0.2s;
-                ">×</button>
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                ">✕</button>
             </div>
             
             <!-- Search Box - Compact -->
@@ -981,7 +1344,7 @@ function createSalesOverlay() {
                 ">×</div>
             </div>
             
-            <!-- Toolbar - Batch legend and View Products button on same line -->
+            <!-- Toolbar - Batch legend and Cart on same line -->
             <div style="
                 display: flex;
                 justify-content: space-between;
@@ -1008,7 +1371,8 @@ function createSalesOverlay() {
                     </div>
                 </div>
                 
-    
+                <!-- Cart Icon Container - Will be populated by updateOverlayCartIcon -->
+                <div id="sales-overlay-cart"></div>
             </div>
         </div>
 
@@ -1088,10 +1452,15 @@ function createSalesOverlay() {
         clearSearchResults();
         searchInput.focus();
     };
+    
+    // Initial update of cart icon
+    setTimeout(() => {
+        updateOverlayCartIcon();
+    }, 100);
 }
 
 // ====================================================
-// SEARCH FUNCTIONS - OPTIMIZED FOR SPEED
+// SEARCH FUNCTIONS - OPTIMIZED FOR SPEED WITH HYBRID APPROACH
 // ====================================================
 
 function clearSearchResults() {
@@ -1167,7 +1536,7 @@ async function onSearchInput(query) {
         return;
     }
 
-    // ⚡ OPTIMIZED: Shorter delay for faster response
+    // ⚡ OPTIMIZED: Reduced delay for faster response
     searchTimeout = setTimeout(async () => {
         console.log(`🔍 SEARCH: "${query}"`);
         
@@ -1206,68 +1575,82 @@ async function onSearchInput(query) {
             document.head.appendChild(style);
         }
         
-        try {
-            // Try backend first
-            if (useBackend) {
-                try {
-                    const startTime = Date.now();
-                    
-                    const res = await fetch(`${FLASK_BACKEND_URL}/sales`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ 
-                            query, 
-                            shop_id: currentShopId,
-                            user_id: currentUser?.uid 
-                        })
-                    });
-
-                    if (!res.ok) {
-                        throw new Error(`Backend returned ${res.status}`);
-                    }
-
-                    const data = await res.json();
-                    const searchTime = Date.now() - startTime;
-                    
-                    console.log(`✅ Search completed in ${searchTime}ms`, {
-                        results: data.items?.length || 0
-                    });
-                    
-                    if (!data.items?.length) {
-                        showNoResults(results);
-                        return;
-                    }
-                    
-                    // Store and render results
-                    lastSearchResults = data.items;
-                    lastSearchQuery = query;
-                    renderResults(data.items);
-                    return;
-                    
-                } catch (backendError) {
-                    console.log('⚠️ Backend search failed, trying local fallback...', backendError);
-                    useBackend = false;
-                }
-            }
-            
-            // Fallback to local search
-            console.log('🔍 Using local fallback search for:', query);
-            const items = await searchLocalFirestore(query);
-            
-            if (!items || items.length === 0) {
-                showNoResults(results);
-                return;
-            }
-            
-            lastSearchResults = items;
+        // PERFORMANCE FIX: Hybrid search approach
+        
+        // 1. IMMEDIATE: Search local cache while waiting for backend
+        const localResults = searchLocalCache(query);
+        let backendResults = null;
+        let backendComplete = false;
+        
+        // If we have local results, show them immediately
+        if (localResults.length > 0) {
+            console.log(`⚡ Showing ${localResults.length} local results immediately`);
+            lastSearchResults = localResults;
             lastSearchQuery = query;
-            renderResults(items);
-            
-        } catch (error) {
-            console.error('❌ Search failed:', error);
-            showError(results);
+            renderResults(localResults);
+            updateOverlayCartIcon();
         }
-    }, 150);
+        
+        // 2. BACKGROUND: Try backend for richer results
+        if (useBackend && currentShopId) {
+            try {
+                const startTime = Date.now();
+                
+                const res = await fetch(`${FLASK_BACKEND_URL}/sales`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        query, 
+                        shop_id: currentShopId,
+                        user_id: currentUser?.uid 
+                    })
+                });
+
+                if (!res.ok) {
+                    throw new Error(`Backend returned ${res.status}`);
+                }
+
+                const data = await res.json();
+                const searchTime = Date.now() - startTime;
+                
+                console.log(`✅ Backend search completed in ${searchTime}ms`, {
+                    results: data.items?.length || 0
+                });
+                
+                if (data.items?.length > 0) {
+                    backendResults = data.items;
+                    backendComplete = true;
+                    
+                    // Update local cache with backend results
+                    data.items.forEach(item => {
+                        const key = item.type === 'selling_unit' 
+                            ? `${item.item_id}_${item.sell_unit_id}`
+                            : item.item_id;
+                        localItemCache.set(key, item);
+                    });
+                    
+                    // Only replace results if backend found more/better items
+                    if (!localResults.length || data.items.length > localResults.length) {
+                        console.log('✨ Updating with richer backend results');
+                        lastSearchResults = data.items;
+                        lastSearchQuery = query;
+                        renderResults(data.items);
+                        updateOverlayCartIcon();
+                    }
+                }
+                
+            } catch (backendError) {
+                console.log('⚠️ Backend search failed, using local results only:', backendError);
+                useBackend = false;
+            }
+        }
+        
+        // If we have no local results and backend failed, show no results
+        if (!backendComplete && localResults.length === 0) {
+            showNoResults(results);
+        }
+        
+    }, 100); // Reduced from 150ms to 100ms
 }
 
 // Helper functions for cleaner code
@@ -1330,7 +1713,7 @@ function showError(container) {
 }
 
 // ====================================================
-// FALLBACK: Local Firestore Search
+// FALLBACK: Local Firestore Search (Keep for compatibility)
 // ====================================================
 async function searchLocalFirestore(query) {
     try {
@@ -1791,7 +2174,7 @@ function renderItemCard(item, resultsContainer) {
 }
 
 // ====================================================
-// OPEN / CLOSE OVERLAY - FIXED FOR STAFF LOGIN
+// OPEN / CLOSE OVERLAY - FIXED FOR STAFF LOGIN + PERFORMANCE WARMUP
 // ====================================================
 
 /**
@@ -1810,6 +2193,12 @@ async function openSalesOverlay() {
     
     console.log('🚀 Opening Sales Overlay');
     console.log('👤 Current user:', currentUser.uid);
+    
+    // ✅ HIDE the floating cart icon when sales overlay opens
+    if (window.cartIcon && window.cartIcon.hideIcon) {
+        window.cartIcon.hideIcon();
+        console.log('🛒 Floating cart icon hidden');
+    }
     
     // ✅ Check if this is a staff login from localStorage
     const sessionType = localStorage.getItem("sessionType");
@@ -1862,6 +2251,12 @@ async function openSalesOverlay() {
     createSalesOverlay();
     salesOverlay.style.display = 'flex';
     
+    // PERFORMANCE FIX: Build local cache and warm up backend
+    await Promise.all([
+        buildLocalItemCache(shopId),
+        warmUpBackend()
+    ]);
+    
     // If there are previous results, restore them
     if (lastSearchResults.length > 0) {
         setTimeout(() => {
@@ -1872,12 +2267,14 @@ async function openSalesOverlay() {
                 const searchClear = document.getElementById('search-clear');
                 if (searchClear) searchClear.style.display = 'flex';
             }
+            updateOverlayCartIcon();
         }, 100);
     }
     
     setTimeout(() => {
         const input = document.getElementById("sales-search-input");
         if (input) input.focus();
+        updateOverlayCartIcon();
     }, 50);
 }
 
@@ -1885,6 +2282,12 @@ function closeSalesOverlay() {
     if (salesOverlay) {
         console.log('🔒 Closing Sales Overlay');
         salesOverlay.style.display = 'none';
+        
+        // ✅ SHOW the floating cart icon when sales overlay closes
+        if (window.cartIcon && window.cartIcon.showIcon) {
+            window.cartIcon.showIcon();
+            console.log('🛒 Floating cart icon shown');
+        }
     }
 }
 
@@ -1906,6 +2309,10 @@ document.addEventListener("DOMContentLoaded", () => {
         setTimeout(() => {
             if (window.cartIcon) {
                 console.log('✅ cart-icon.js now loaded');
+                // If overlay is open, update cart icon
+                if (salesOverlay && salesOverlay.style.display === 'flex') {
+                    updateOverlayCartIcon();
+                }
             } else {
                 console.log('❌ cart-icon.js still not loaded');
                 console.error('cart-icon.js is required for sales functionality');
@@ -1919,6 +2326,7 @@ document.addEventListener("DOMContentLoaded", () => {
     window.openSalesOverlay = openSalesOverlay;
     window.closeSalesOverlay = closeSalesOverlay;
     window.batchIntelligence = batchIntelligence;
+    window.updateOverlayCartIcon = updateOverlayCartIcon; // Expose for cart updates
     
     // Initialize sell button
     const sellBtn = document.getElementById("sell-btn");
@@ -1942,6 +2350,20 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
     
+    // Listen for cart updates to refresh the overlay cart icon
+    document.addEventListener('cartUpdated', () => {
+        if (salesOverlay && salesOverlay.style.display === 'flex') {
+            updateOverlayCartIcon();
+        }
+    });
+    
+    // Periodically check cart icon if needed
+    setInterval(() => {
+        if (salesOverlay && salesOverlay.style.display === 'flex' && window.cartIcon) {
+            updateOverlayCartIcon();
+        }
+    }, 2000);
+    
     console.log('✅ Sales system ready');
     console.log('🚨 EMERGENCY FIX ACTIVE: Handling frontend/backend stock mismatch');
     console.log('🔧 SEARCH FIX: Added local fallback search when backend is unavailable');
@@ -1950,6 +2372,12 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log('🔊 AUDIO FIX: Added beep sound when tapping items');
     console.log('💰 CURRENCY: All prices now in KSh (Kenyan Shillings)');
     console.log('📱 RESPONSIVE: Added mobile-optimized badge positioning');
+    console.log('🛒 CART ICON: Integrated into sales overlay header');
+    console.log('🔄 CART ICON FIX: Floating cart hides when overlay opens, shows when closed');
+    console.log('🔘 CLOSE BUTTON FIX: Made more visible and accessible');
+    console.log('⚡ PERFORMANCE FIX #1: Immediate cache invalidation after adding items');
+    console.log('⚡ PERFORMANCE FIX #2: Hybrid search (instant local + background backend)');
+    console.log('⚡ PERFORMANCE FIX #3: Pre-warm backend connection on overlay open');
     
     console.log(`
 ╔═══════════════════════════════════════════╗
@@ -1959,18 +2387,14 @@ document.addEventListener("DOMContentLoaded", () => {
 ║ • Auto batch switching                   ║
 ║ • No quantity prompts                    ║
 ║ • Integrated with cart-icon.js           ║
+║ • 🛒 Cart icon in sales header           ║
+║ • 🔄 Floating cart hides during sale     ║
+║ • 🔘 Close button always visible         ║
+║ • ⚡ INSTANT SEARCH (local cache)        ║
+║ • ⚡ ITEMS APPEAR IMMEDIATELY            ║
 ║ • Press Alt+S to open sales              ║
 ║ • 💰 Currency: KSh (Kenyan Shillings)    ║
 ║ • 📱 Mobile-optimized badges & cards     ║
-║ • 🚨 EMERGENCY FIX: Frontend/Backend     ║
-║   data mismatch handling                 ║
-║ • 🔧 SEARCH FIX: Local Firestore fallback║
-║   when backend is unavailable             ║
-║ • 👥 STAFF FIX: Proper shop ID resolution║
-║   for staff logins                        ║
-║ • 🎨 UX FIX: Results persist after tapping║
-║   & Professional modern design            ║
-║ • 🔊 AUDIO FIX: Beep sound on item tap   ║
 ╚═══════════════════════════════════════════╝
 `);
 });
@@ -1983,5 +2407,6 @@ export {
     openSalesOverlay,
     closeSalesOverlay,
     batchIntelligence,
-    handleOneTap
+    handleOneTap,
+    updateOverlayCartIcon
 };

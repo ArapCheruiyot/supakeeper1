@@ -1,4 +1,5 @@
 // categorisedItems.js (UPDATED: Better UX + Empty States + Visual Cues + Bilingual Text + Examples + Clickable Design)
+// FIXED: Close button now inside overlay-content instead of floating outside
 import { db } from "./firebase-config.js";
 import {
   collection,
@@ -359,6 +360,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.body.classList.remove("categories-overlay-open");
   }
 
+  // ===== FIXED: Close button now INSIDE overlay-content =====
   function injectCategoriesCloseButton() {
     if (overlay && !document.getElementById("categories-close-btn")) {
       const closeBtn = document.createElement("span");
@@ -367,18 +369,55 @@ document.addEventListener("DOMContentLoaded", () => {
       closeBtn.setAttribute("role", "button");
       closeBtn.setAttribute("aria-label", "Close categories and go back to dashboard / Funga aina na urudi kwenye dashibodi");
       closeBtn.innerHTML = "&times;";
-      closeBtn.style.position = "absolute";
-      closeBtn.style.top = "10px";
-      closeBtn.style.right = "15px";
-      closeBtn.style.fontSize = "24px";
-      closeBtn.style.cursor = "pointer";
-      closeBtn.style.zIndex = "1001";
-      overlay.appendChild(closeBtn);
+      
+      // Style the close button
+      closeBtn.style.cssText = `
+        position: absolute;
+        top: 16px;
+        right: 20px;
+        font-size: 28px;
+        font-weight: bold;
+        color: #555;
+        cursor: pointer;
+        z-index: 1010;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255,255,255,0.95);
+        border-radius: 50%;
+        border: 1px solid rgba(0,0,0,0.06);
+        transition: all 0.2s ease;
+      `;
+
+      // Add hover effect
+      closeBtn.addEventListener("mouseenter", () => {
+        closeBtn.style.color = "#e53935";
+        closeBtn.style.transform = "scale(1.1)";
+      });
+      closeBtn.addEventListener("mouseleave", () => {
+        closeBtn.style.color = "#555";
+        closeBtn.style.transform = "scale(1)";
+      });
 
       closeBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         closeCategoriesOverlay();
       });
+
+      // CRITICAL FIX: Append to overlay-content instead of overlay
+      const overlayContent = document.querySelector(".overlay-content");
+      if (overlayContent) {
+        // Ensure overlay-content has relative positioning for absolute child
+        overlayContent.style.position = "relative";
+        overlayContent.appendChild(closeBtn);
+        console.log("✅ Close button added to overlay-content");
+      } else {
+        // Fallback to overlay if content not found (shouldn't happen)
+        overlay.appendChild(closeBtn);
+        console.warn("⚠️ Fallback: Close button added to overlay");
+      }
     }
   }
 

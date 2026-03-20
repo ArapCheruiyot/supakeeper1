@@ -16,6 +16,9 @@
         href="{{ url_for('static', filename='css/itemDetailOverlay.css') }}"
     />
 
+<!-- Load CSS first - CORRECT PATH for standard Flask structure -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/quick-add-overlay.css') }}">
+
 
     <!-- Cloudinary Upload Widget -->
     <script src="https://widget.cloudinary.com/v2.0/global/all.js"></script>
@@ -292,6 +295,9 @@
 <script src="{{ url_for('static', filename='js/itemSearch.js') }}"></script>
 <!-- Sales Empty State -->
 <script src="{{ url_for('static', filename='js/salesEmptyState.js') }}"></script>
+<!-- At the bottom of your dashboard.html, before closing body tag -->
+<script type="module" src="static/js/quick-add-overlay.js"></script>
+
 
 </body>
 </html>
