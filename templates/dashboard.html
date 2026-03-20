@@ -2,30 +2,36 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#667eea">
+    
+    <!-- iOS Support -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Superkeeper">
+    
+    <!-- iOS Icons - Point to your images folder -->
+    <link rel="apple-touch-icon" href="/static/images/logo-192x192.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/static/images/logo-152x152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/images/logo-192x192.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/static/images/logo-192x192.png">
+    
+    <!-- Title -->
     <title>Superkeeper Dashboard</title>
 
     <!-- Styles -->
-    <link
-        rel="stylesheet"
-        href="{{ url_for('static', filename='css/dashboard.css') }}"
-    />
-    <link
-        rel="stylesheet"
-        href="{{ url_for('static', filename='css/itemDetailOverlay.css') }}"
-    />
-
-<!-- Load CSS first - CORRECT PATH for standard Flask structure -->
-<link rel="stylesheet" href="{{ url_for('static', filename='css/quick-add-overlay.css') }}">
-
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/itemDetailOverlay.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/quick-add-overlay.css') }}">
 
     <!-- Cloudinary Upload Widget -->
     <script src="https://widget.cloudinary.com/v2.0/global/all.js"></script>
 </head>
 
 <body>
-
     <!-- NAVIGATION BAR -->
     <nav class="navbar">
         <div class="nav-left">
@@ -39,7 +45,7 @@
     <!-- HEADER -->
     <header>
         <div>
-            <h1>Welcome to Superkeeper</h1>
+            <h1>Welcome to Superkeeper</h1>  <!-- ✅ Fixed closing tag -->
             <p>You are now logged in!</p>
         </div>
     </header>
@@ -48,256 +54,164 @@
     <main>
         <div class="action-buttons">
             <button id="sell-btn" class="red-btn">Sell</button>
-            <button id="manage-stock-btn" class="blue-btn">
-                Manage Stock
-            </button>
+            <button id="manage-stock-btn" class="blue-btn">Manage Stock</button>
         </div>
 
         <!-- STOCK OVERLAY -->
         <div id="overlay" class="overlay hidden">
             <div class="overlay-content hidden">
-                <button id="categories-btn" class="categories-btn">
-                    + Categories
-                </button>
-                <div
-                    id="categories-list"
-                    class="categories-list"
-                ></div>
+                <button id="categories-btn" class="categories-btn">+ Categories</button>
+                <div id="categories-list" class="categories-list"></div>
             </div>
 
             <!-- ITEM DETAIL OVERLAY -->
-            <div
-                id="item-detail"
-                class="item-detail hidden"
-                aria-hidden="true"
-            >
+            <div id="item-detail" class="item-detail hidden" aria-hidden="true">
                 <div class="item-detail-header">
                     <h3 id="item-name"></h3>
-                    <button
-                        id="edit-toggle-btn"
-                        class="edit-btn"
-                    >
-                        Edit
-                    </button>
+                    <button id="edit-toggle-btn" class="edit-btn">Edit</button>
                 </div>
-
-                <div id="item-meta" class="item-meta">
-                    <!-- Rendered by JS -->
-                </div>
+                <div id="item-meta" class="item-meta"></div>
             </div>
         </div>
     </main>
 
     <!-- TRANSACTION OVERLAY -->
-    <div
-        id="transaction-overlay"
-        class="modal hidden"
-        aria-hidden="true"
-    >
+    <div id="transaction-overlay" class="modal hidden" aria-hidden="true">
         <div class="modal-content">
-            <span
-                id="close-transaction"
-                class="close-x"
-                role="button"
-                aria-label="Close"
-            >
-                &times;
-            </span>
-
+            <span id="close-transaction" class="close-x" role="button" aria-label="Close">&times;</span>
             <h3 id="transaction-title"></h3>
             <div id="transaction-list"></div>
-
-            <button id="add-transaction-btn">
-                + Add Transaction
-            </button>
+            <button id="add-transaction-btn">+ Add Transaction</button>
         </div>
     </div>
 
     <!-- CATEGORY MODAL -->
-    <div
-        id="category-modal"
-        class="modal hidden"
-        aria-hidden="true"
-    >
+    <div id="category-modal" class="modal hidden" aria-hidden="true">
         <div class="modal-content">
-            <span
-                id="close-modal-x"
-                class="close-x"
-                role="button"
-                aria-label="Close"
-            >
-                &times;
-            </span>
-
+            <span id="close-modal-x" class="close-x" role="button" aria-label="Close">&times;</span>
             <h3 id="modal-title"></h3>
-
-            <button id="add-subcategory-btn">
-                + Subcategory
-            </button>
-            <button id="add-item-btn">
-                + Item
-            </button>
-            <button
-                id="delete-category-btn"
-                class="danger-btn"
-            >
-                Delete Category
-            </button>
+            <button id="add-subcategory-btn">+ Subcategory</button>
+            <button id="add-item-btn">+ Item</button>
+            <button id="delete-category-btn" class="danger-btn">Delete Category</button>
         </div>
     </div>
 
     <!-- CORE SCRIPTS -->
-    <script
-        type="module"
-        src="{{ url_for('static', filename='js/firebase-config.js') }}"
-    ></script>
-
-    <script
-        type="module"
-        src="{{ url_for('static', filename='js/categorisedItems.js') }}"
-    ></script>
-
-    <script
-        type="module"
-        src="{{ url_for('static', filename='js/homePageNavigationBar.js') }}"
-    ></script>
-
-    <script
-        type="module"
-        src="{{ url_for('static', filename='js/shopnameManage.js') }}"
-    ></script>
-
-    <script
-        type="module"
-        src="{{ url_for('static', filename='js/itemDetailOverlay.js') }}"
-    ></script>
-
-    <!-- SALES FLOW (SELL BUTTON) -->
+    <script type="module" src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/categorisedItems.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/homePageNavigationBar.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/shopnameManage.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/itemDetailOverlay.js') }}"></script>
     <script type="module" src="{{ url_for('static', filename='js/sales.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/businessIntelligence.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/staffManager.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/access-controls.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/smallSellAbleUnits.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/cart-icon.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/initiatePlan.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/planManager.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/upgrade.js') }}"></script>
+    
+    <!-- Non-module scripts -->
+    <script src="{{ url_for('static', filename='js/demoItemLoader.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/itemSearch.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/salesEmptyState.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/quick-add-overlay.js') }}"></script>
+    
+    <!-- ===== INSTALL BUTTON SCRIPT (Keep at the very end) ===== -->
+    <script src="{{ url_for('static', filename='js/install-button.js') }}"></script>
 
-<script type="module" src="{{ url_for('static', filename='js/businessIntelligence.js') }}"></script>
-<script type="module" src="{{ url_for('static', filename='js/staffManager.js') }}"></script><!-- Add this at the END of dashboard.html -->
-<script type="module" src="{{ url_for('static', filename='js/access-controls.js') }}"></script>
+    <!-- ===== EXISTING DASHBOARD SCRIPT ===== -->
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            console.log("Dashboard loaded");
 
-<!-- ========== UPDATED SCRIPT WITH DEMO LOADING OVERLAY ========== -->
-<script>
-  document.addEventListener("DOMContentLoaded", () => {
-    console.log("Dashboard loaded");
-
-    // ===== DEMO LOADING OVERLAY =====
-    (function() {
-        // Check if this is a fresh demo login
-        const isFreshDemo = localStorage.getItem("freshDemoLogin") === "true";
-        
-        if (isFreshDemo) {
-            // Clear the flag immediately
-            localStorage.removeItem("freshDemoLogin");
-            
-            console.log("🔄 Fresh demo login detected - showing loading message");
-            
-            // Create loading overlay
-            const overlay = document.createElement('div');
-            overlay.id = 'demo-loading-overlay';
-            overlay.innerHTML = `
-                <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.95); z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                    <div style="border: 4px solid #f3f3f3; border-top: 4px solid #22c55e; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px;"></div>
-                    <p style="font-size: 18px; color: #166534; font-weight: 500;">Loading your demo items...</p>
-                    <p style="font-size: 14px; color: #666; margin-top: 8px;">This will just take a moment</p>
-                    <p style="font-size: 12px; color: #999; margin-top: 20px;">Items will appear automatically</p>
-                </div>
-                <style>
-                    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-                </style>
-            `;
-            document.body.appendChild(overlay);
-            
-            // Watch for items to load
-            const checkItemsLoaded = setInterval(function() {
-                // Check if any items are visible in the categories list
-                const items = document.querySelectorAll('.item, .categories-list .item, [class*="item"]');
-                const hasItems = items.length > 0;
+            // ===== DEMO LOADING OVERLAY =====
+            (function() {
+                const isFreshDemo = localStorage.getItem("freshDemoLogin") === "true";
                 
-                if (hasItems) {
-                    console.log("✅ Items detected - removing loading overlay");
-                    clearInterval(checkItemsLoaded);
+                if (isFreshDemo) {
+                    localStorage.removeItem("freshDemoLogin");
                     
-                    const overlay = document.getElementById('demo-loading-overlay');
-                    if (overlay) {
-                        overlay.style.transition = 'opacity 0.5s';
-                        overlay.style.opacity = '0';
-                        setTimeout(() => {
-                            if (overlay && overlay.parentNode) {
-                                overlay.parentNode.removeChild(overlay);
+                    console.log("🔄 Fresh demo login detected - showing loading message");
+                    
+                    const overlay = document.createElement('div');
+                    overlay.id = 'demo-loading-overlay';
+                    overlay.innerHTML = `
+                        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.95); z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                            <div style="border: 4px solid #f3f3f3; border-top: 4px solid #22c55e; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px;"></div>
+                            <p style="font-size: 18px; color: #166534; font-weight: 500;">Loading your demo items...</p>
+                            <p style="font-size: 14px; color: #666; margin-top: 8px;">This will just take a moment</p>
+                            <p style="font-size: 12px; color: #999; margin-top: 20px;">Items will appear automatically</p>
+                        </div>
+                        <style>
+                            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                        </style>
+                    `;
+                    document.body.appendChild(overlay);
+                    
+                    const checkItemsLoaded = setInterval(function() {
+                        const items = document.querySelectorAll('.item, .categories-list .item, [class*="item"]');
+                        const hasItems = items.length > 0;
+                        
+                        if (hasItems) {
+                            console.log("✅ Items detected - removing loading overlay");
+                            clearInterval(checkItemsLoaded);
+                            
+                            const overlay = document.getElementById('demo-loading-overlay');
+                            if (overlay) {
+                                overlay.style.transition = 'opacity 0.5s';
+                                overlay.style.opacity = '0';
+                                setTimeout(() => {
+                                    if (overlay && overlay.parentNode) {
+                                        overlay.parentNode.removeChild(overlay);
+                                    }
+                                }, 500);
                             }
-                        }, 500);
-                    }
-                }
-            }, 500); // Check every half second
-            
-            // Auto-remove after 5 seconds just in case (fallback)
-            setTimeout(function() {
-                clearInterval(checkItemsLoaded);
-                const overlay = document.getElementById('demo-loading-overlay');
-                if (overlay && overlay.parentNode) {
-                    overlay.style.transition = 'opacity 0.5s';
-                    overlay.style.opacity = '0';
-                    setTimeout(() => {
-                        if (overlay && overlay.parentNode) {
-                            overlay.parentNode.removeChild(overlay);
                         }
                     }, 500);
+                    
+                    setTimeout(function() {
+                        clearInterval(checkItemsLoaded);
+                        const overlay = document.getElementById('demo-loading-overlay');
+                        if (overlay && overlay.parentNode) {
+                            overlay.style.transition = 'opacity 0.5s';
+                            overlay.style.opacity = '0';
+                            setTimeout(() => {
+                                if (overlay && overlay.parentNode) {
+                                    overlay.parentNode.removeChild(overlay);
+                                }
+                            }, 500);
+                        }
+                    }, 5000);
                 }
-            }, 5000);
-        }
-    })();
+            })();
 
-    // NEW auth/session check
-    const sessionType = localStorage.getItem("sessionType"); // "owner" | "staff"
-    const activeShopId = localStorage.getItem("activeShopId");
+            // Auth/session check
+            const sessionType = localStorage.getItem("sessionType");
+            const activeShopId = localStorage.getItem("activeShopId");
 
-    if (!sessionType || !activeShopId) {
-      window.location.href = "/";
-      return;
-    }
+            if (!sessionType || !activeShopId) {
+                window.location.href = "/";
+                return;
+            }
 
-    // Apply access controls
-    if (window.applyAccessControls) {
-      if (sessionType === "staff") {
-        let level = 1;
-        try {
-          const ctx = JSON.parse(localStorage.getItem("staffContext") || "null");
-          level = Number(ctx?.accessLevel ?? 1);
-        } catch (e) {
-          level = 1;
-        }
-        window.applyAccessControls(level);
-      } else {
-        // owner = full access
-        window.applyAccessControls(4);
-      }
-    }
-
-    // IMPORTANT:
-    // Do NOT override the welcome message here.
-    // homePageNavigationBar.js already sets: Welcome, {Google displayName}
-    // (and for staff it can fallback to staffContext if needed)
-  });
-</script>
-<!-- ====== END OF UPDATED SCRIPT ====== -->
-
-<script type="module" src="{{ url_for('static', filename='js/smallSellAbleUnits.js') }}"></script>
-<script type="module" src="{{ url_for('static', filename='js/cart-icon.js') }}"></script>
-<script type="module" src="{{ url_for('static', filename='js/initiatePlan.js') }}"></script>
-<script type="module" src="{{ url_for('static', filename='js/planManager.js') }}"></script>
-<script type="module" src="{{ url_for('static', filename='js/upgrade.js') }}"></script>
-<!-- Smart Demo Item Loader -->
-<script src="{{ url_for('static', filename='js/demoItemLoader.js') }}"></script>
-<script src="{{ url_for('static', filename='js/itemSearch.js') }}"></script>
-<!-- Sales Empty State -->
-<script src="{{ url_for('static', filename='js/salesEmptyState.js') }}"></script>
-<!-- At the bottom of your dashboard.html, before closing body tag -->
-<script type="module" src="static/js/quick-add-overlay.js"></script>
-
-
+            // Apply access controls
+            if (window.applyAccessControls) {
+                if (sessionType === "staff") {
+                    let level = 1;
+                    try {
+                        const ctx = JSON.parse(localStorage.getItem("staffContext") || "null");
+                        level = Number(ctx?.accessLevel ?? 1);
+                    } catch (e) {
+                        level = 1;
+                    }
+                    window.applyAccessControls(level);
+                } else {
+                    window.applyAccessControls(4);
+                }
+            }
+        });
+    </script>
 </body>
 </html>

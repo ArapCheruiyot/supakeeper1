@@ -1,0 +1,17 @@
+{
+  "name": "Superkeeper POS",
+  "short_name": "Superkeeper",
+  "description": "Inventory POS for Small Businesses",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#1e293b",
+  "theme_color": "#667eea",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/static/images/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
